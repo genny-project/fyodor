@@ -122,7 +122,8 @@ public class TopologyProducer {
 
 		// Read the input Kafka topic into a KStream instance.
 		builder.stream("search_events", Consumed.with(Serdes.String(), Serdes.String()))
-				.filter((k, v) -> performSearch(v))
+				// .filter((k, v) -> validateSearch(v))
+				.peek((key, value) -> performSearch(value))
 				.to("search_data", Produced.with(Serdes.String(), Serdes.String()));
 
 		return builder.build();
