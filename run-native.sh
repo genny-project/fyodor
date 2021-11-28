@@ -13,4 +13,4 @@ export GENNY_SHOW_VALUES=TRUE
 export GENNY_SERVICE_USERNAME=service
 export GENNY_KEYCLOAK_URL=https://keycloak-office.gada.io
 export GENNY_API_URL=http://internmatch.genny.life:8280
-export GENNY_SHOW_VALUES=true; ./target/fyodor-9.9.0-runner
+export GENNY_SHOW_VALUES=true; ./target/fyodor-9.10.0-runner

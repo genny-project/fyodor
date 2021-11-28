@@ -5,8 +5,8 @@ import javax.json.bind.JsonbBuilder;
 
 import org.junit.jupiter.api.Test;
 
-import life.genny.qwanda.entity.BaseEntity;
-import life.genny.qwanda.entity.SearchEntity;
+import life.genny.qwandaq.entity.BaseEntity;
+import life.genny.qwandaq.entity.SearchEntity;
 
 public class JsonTest {
 
