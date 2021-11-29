@@ -13,17 +13,15 @@ import java.time.*;
 import java.util.UUID;
 import java.util.Arrays;
 
-import javax.enterprise.context.ApplicationScoped;
-import javax.inject.Inject;
 import javax.transaction.Transactional;
 import javax.json.JsonObject;
 import javax.json.bind.Jsonb;
 import javax.json.bind.JsonbBuilder;
 import javax.persistence.EntityManager;
 import javax.persistence.NoResultException;
+import javax.enterprise.context.ApplicationScoped;
 
 import org.apache.commons.lang3.StringUtils;
-import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jboss.logging.Logger;
 
 import com.querydsl.jpa.impl.JPAQuery;
@@ -49,12 +47,11 @@ import life.genny.qwandaq.entity.QEntityEntity;
 import life.genny.qwandaq.message.QSearchBeResult;
 import life.genny.fyodor.service.ApiService;
 
+// @ApplicationScoped
 public class SearchUtility {
 
 	private static final Logger log = Logger.getLogger(SearchUtility.class);
 
-	@Inject
-	@RestClient
 	ApiService apiService;
 
 	EntityManager entityManager;
@@ -65,27 +62,25 @@ public class SearchUtility {
 
     static public Map<String,Map<String, Attribute>> realmAttributeMap = new ConcurrentHashMap<>();
 
-	public SearchUtility(GennyToken serviceToken, EntityManager entityManager) {
+	public SearchUtility(GennyToken serviceToken, EntityManager entityManager, ApiService apiService) {
 		this.serviceToken = serviceToken;
 		this.entityManager = entityManager;
-	}
-
-	public void processSearchEvent(String data) {
-
-		// QDataBaseEntityMessage msg = JsonUtils.fromJson(data, QDataBaseEntityMessage.class);
-		QDataBaseEntityMessage msg = new QDataBaseEntityMessage();
-
-		SearchEntity searchBE = (SearchEntity) msg.getItems()[0];
-
-		QSearchBeResult results = findBySearch25(serviceToken.getRealm(), searchBE, false, true);
+		this.apiService = apiService;
 	}
 
 	/**
-	 * Perform a safe search using named parameters to
-	 * protect from SQL Injection
-	*/
-	public QSearchBeResult findBySearch25(String realm, final SearchEntity searchBE, Boolean countOnly, Boolean fetchEntities) {
+	* Perform a safe search using named parameters to
+	* protect from SQL Injection
+	* 
+	* @param realm				Realm to search in.
+	* @param searchBE			SearchEntity used to search.
+	* @param countOnly			Only perform a count.
+	* @param fetchEntities		Fetch Entities, or only codes.
+	* @return					Search Result Object.
+	 */
+	public QSearchBeResult findBySearch25(final SearchEntity searchBE, Boolean countOnly, Boolean fetchEntities) {
 
+		String realm = this.serviceToken.getRealm();
 		Integer defaultPageSize = 20;
 		// Init necessary vars
 		QSearchBeResult result = null;
@@ -111,6 +106,9 @@ public class SearchUtility {
 		// Find AND and OR attributes and remove these prefixs from each of them
 		List<EntityAttribute> andAttributes = searchBE.findPrefixEntityAttributes("AND_");
 		List<EntityAttribute> orAttributes = searchBE.findPrefixEntityAttributes("OR_");
+
+		String[] wilcardWhiteList = searchBE.findPrefixEntityAttributes("WTL_").stream().map(x -> x.getAttributeCode().substring(4)).toArray(String[]::new);
+		String[] wilcardBlackList = searchBE.findPrefixEntityAttributes("BKL_").stream().map(x -> x.getAttributeCode().substring(4)).toArray(String[]::new);
 
 		BooleanBuilder builder = new BooleanBuilder();
 
@@ -247,21 +245,44 @@ public class SearchUtility {
 				if (ea.getValueString() != null) {
 					if (!StringUtils.isBlank(ea.getValueString())) {
 						String wildcardValue = ea.getValueString();
-						// wildcardValue = wildcardValue.replaceAll("[^A-zA-Z0-9 .,'/@()_-]", "");
+						// wildcardValue = wildcardValue.replaceAll("[^A-zA-Z0-9 .,'@()_-]", "");
 						wildcardValue = "%" + wildcardValue + "%";
-
-						QEntityAttribute eaWildcardJoin = new QEntityAttribute("eaWildcardJoin");
-						query.leftJoin(eaWildcardJoin).on(eaWildcardJoin.pk.baseEntity.id.eq(baseEntity.id));
-
-						builder.and(eaWildcardJoin.valueString.like(wildcardValue).or(baseEntity.name.like(wildcardValue)));
 						log.info("WILDCARD like " + wildcardValue);
 
-						builder.and(baseEntity.name.like(wildcardValue)
-								.or(eaWildcardJoin.valueString.like(wildcardValue))
-								.or(Expressions.stringTemplate("replace({0},'[\"','')", 
-										Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
-										).in(generateWildcardSubQuery(wildcardValue, 1))
-									));
+						QEntityAttribute eaWildcardJoin = new QEntityAttribute("eaWildcardJoin");
+						query.leftJoin(eaWildcardJoin);
+
+						if (wilcardWhiteList.length > 0) {
+							log.info("Whitelist = " + Arrays.toString(wilcardWhiteList));
+							query.on(eaWildcardJoin.pk.baseEntity.id.eq(baseEntity.id).and(eaWildcardJoin.attributeCode.in(wilcardWhiteList)));
+						} else if (wilcardBlackList.length > 0) {
+							log.info("Blacklist = " + Arrays.toString(wilcardBlackList));
+							query.on(eaWildcardJoin.pk.baseEntity.id.eq(baseEntity.id).and(eaWildcardJoin.attributeCode.notIn(wilcardBlackList)));
+						} else {
+							query.on(eaWildcardJoin.pk.baseEntity.id.eq(baseEntity.id));
+						}
+
+						// Find the depth level for associated wildcards
+						EntityAttribute depthLevelAttribute = searchBE.findEntityAttribute("SCH_WILDCARD_DEPTH").orElse(null);
+						Integer depth = 0;
+						if (depthLevelAttribute != null) {
+							depth = depthLevelAttribute.getValueInteger();
+						}
+
+						if (depth != null && depth > 0) {
+							builder.and(baseEntity.name.like(wildcardValue)
+									.or(eaWildcardJoin.valueString.like(wildcardValue)
+										.or(Expressions.stringTemplate("replace({0},'[\"','')", 
+												Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
+												).in(generateWildcardSubQuery(wildcardValue, depth, wilcardWhiteList, wilcardBlackList))
+										   )
+									   )
+									);
+						} else {
+							builder.and(baseEntity.name.like(wildcardValue)
+									.or(eaWildcardJoin.valueString.like(wildcardValue)));
+
+						}
 					}
 				}
 			} else if (attributeCode.startsWith("SCH_LINK_CODE")) {
@@ -468,7 +489,7 @@ public class SearchUtility {
 
 		String attributeFilterValue = ea.getValue().toString();
 		String condition = SearchEntity.convertFromSaveable(ea.getAttributeName());
-		System.out.println(ea.getAttributeCode() + " " + condition + " " + attributeFilterValue);
+		log.info(ea.getAttributeCode() + " " + condition + " " + attributeFilterValue);
 
 		String valueString = "";
 		if (ea.getValueString() != null) {
@@ -630,6 +651,7 @@ public class SearchUtility {
 			}
 		});
 	}
+
 	/**
 	* Create a sub query for searhing across LNK associations
 	*
@@ -699,7 +721,7 @@ public class SearchUtility {
 		}
 	}
 
-	public static JPQLQuery generateWildcardSubQuery(String value, Integer recursion) {
+	public static JPQLQuery generateWildcardSubQuery(String value, Integer recursion, String[] whitelist, String[] blacklist) {
 
 		// Random uuid to for uniqueness in the query string
 		String uuid = UUID.randomUUID().toString().substring(0, 8);
@@ -709,25 +731,29 @@ public class SearchUtility {
 		QEntityAttribute entityAttribute = new QEntityAttribute("entityAttribute_"+uuid);
 
 
-		if (recursion > 1) {
-			return JPAExpressions.selectDistinct(baseEntity.code)
-				.from(baseEntity)
-				.leftJoin(entityAttribute)
-				.on(entityAttribute.pk.baseEntity.id.eq(baseEntity.id))
-				.where(entityAttribute.valueString.like(value)
-						.or(
-							Expressions.stringTemplate("replace({0},'[\"','')", 
-								Expressions.stringTemplate("replace({0},'\"]','')", entityAttribute.valueString)
-								).in(generateWildcardSubQuery(value, recursion-1))
-							));
+		JPQLQuery exp = JPAExpressions.selectDistinct(baseEntity.code)
+			.from(baseEntity)
+			.leftJoin(entityAttribute);
 
+		// Handle whitelisting and blacklisting
+		if (whitelist.length > 0) {
+			exp.on(entityAttribute.pk.baseEntity.id.eq(baseEntity.id).and(entityAttribute.attributeCode.in(whitelist)));
+		} else if (blacklist.length > 0) {
+			exp.on(entityAttribute.pk.baseEntity.id.eq(baseEntity.id).and(entityAttribute.attributeCode.notIn(blacklist)));
 		} else {
-			return JPAExpressions.selectDistinct(baseEntity.code)
-				.from(baseEntity)
-				.leftJoin(entityAttribute)
-				.on(entityAttribute.pk.baseEntity.id.eq(baseEntity.id))
-				.where(entityAttribute.valueString.like(value));
+			exp.on(entityAttribute.pk.baseEntity.id.eq(baseEntity.id));
 		}
+
+		if (recursion > 1) {
+			exp.where(entityAttribute.valueString.like(value)
+				.or(Expressions.stringTemplate("replace({0},'[\"','')", 
+					Expressions.stringTemplate("replace({0},'\"]','')", entityAttribute.valueString)
+					).in(generateWildcardSubQuery(value, recursion-1, whitelist, blacklist))
+			   ));
+		} else {
+			exp.where(entityAttribute.valueString.like(value));
+		}
+		return exp;
 	}
 
 	public static List<String> getSearchColumnFilterArray(SearchEntity searchBE)
