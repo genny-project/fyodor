@@ -146,7 +146,6 @@ public class InternalConsumer {
 			producer.getToSearchData().send(json);
 
 		} else if (msg.getDestination().equals("webcmds")) {
-			log.info("SENDING TO FRONTEND");
 
 			QDataBaseEntityMessage entityMsg = new QDataBaseEntityMessage(results.getEntities());
 			entityMsg.setTotal(results.getTotal());
