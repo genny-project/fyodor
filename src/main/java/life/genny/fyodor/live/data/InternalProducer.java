@@ -23,4 +23,9 @@ public class InternalProducer {
     return searchData;
   }
 
+  @Inject @Channel("webcmdsout") Emitter<String> webCmds;
+  public Emitter<String> getToWebCmds() {
+    return webCmds;
+  }
+
 }

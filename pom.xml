@@ -281,6 +281,7 @@
       </build>
       <properties>
         <quarkus.package.type>native</quarkus.package.type>
+		<quarkus.native.native-image-xmx>10g</quarkus.native.native-image-xmx>
       </properties>
     </profile>
   </profiles>

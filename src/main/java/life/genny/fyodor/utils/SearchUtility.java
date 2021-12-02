@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.time.*;
 import java.util.UUID;
 import java.util.Arrays;
+import java.util.Optional;
 
 import javax.transaction.Transactional;
 import javax.json.JsonObject;
@@ -19,7 +20,6 @@ import javax.json.bind.Jsonb;
 import javax.json.bind.JsonbBuilder;
 import javax.persistence.EntityManager;
 import javax.persistence.NoResultException;
-import javax.enterprise.context.ApplicationScoped;
 
 import org.apache.commons.lang3.StringUtils;
 import org.jboss.logging.Logger;
@@ -37,7 +37,6 @@ import life.genny.fyodor.models.GennyToken;
 import life.genny.qwandaq.attribute.Attribute;
 import life.genny.qwandaq.attribute.EntityAttribute;
 import life.genny.qwandaq.entity.SearchEntity;
-import life.genny.qwandaq.message.QDataBaseEntityMessage;
 import life.genny.qwandaq.attribute.QEntityAttribute;
 import life.genny.qwandaq.datatype.DataType;
 import life.genny.qwandaq.entity.BaseEntity;
@@ -46,6 +45,8 @@ import life.genny.qwandaq.EEntityStatus;
 import life.genny.qwandaq.entity.QEntityEntity;
 import life.genny.qwandaq.message.QSearchBeResult;
 import life.genny.fyodor.service.ApiService;
+import life.genny.qwandaq.Answer;
+import life.genny.qwandaq.exception.BadDataException;
 
 // @ApplicationScoped
 public class SearchUtility {
@@ -68,6 +69,97 @@ public class SearchUtility {
 		this.apiService = apiService;
 	}
 
+	public QSearchBeResult processSearchEntity(SearchEntity searchBE) {
+
+		QSearchBeResult results = null;
+
+		// Check for a specific item search
+		for (EntityAttribute attr : searchBE.getBaseEntityAttributes()) {
+			if (attr.getAttributeCode().equals("PRI_CODE") && attr.getAttributeName().equals("_EQ_")) {
+				log.info("SINGLE BASE ENTITY SEARCH DETECTED");
+				// result = new JsonArray("[\""+attr.getValue()+"\"]");
+				BaseEntity be = fetchBaseEntityFromCache(attr.getValue(), serviceToken);
+				be.setIndex(0);
+				BaseEntity[] arr = new BaseEntity[1];
+				arr[0] = be;
+				results = new QSearchBeResult(arr, Long.valueOf(1));
+				break;
+			}
+		}
+
+		// Perform search
+		if (results == null) {
+			results = findBySearch25(searchBE, false, true);
+		}
+
+		List<EntityAttribute> cals = searchBE.findPrefixEntityAttributes("COL__");
+		if (cals != null) {
+			log.info("searchUsingSearch25 -> detected " + cals.size() + " CALS");
+
+			for (EntityAttribute calEA : cals) {
+				log.info("Found CAL with code: " + calEA.getAttributeCode());
+			}
+		}
+
+		// Find Allowed Columns
+		String[] filterArray = getSearchColumnFilterArray(searchBE).toArray(new String[0]);
+		// Used to disable the column privacy
+		EntityAttribute columnWildcard = searchBE.findEntityAttribute("COL_*").orElse(null);
+
+		// Otherwise handle cals
+		if (results != null && results.getEntities() != null && results.getEntities().length > 0) {
+
+			for (BaseEntity be : results.getEntities()) {
+
+				if (be != null) {
+
+					// Filter unwanted attributes
+					if (columnWildcard == null) {
+						be = privacyFilter(be, filterArray);
+					}
+
+					for (EntityAttribute calEA : cals) {
+
+						Answer ans = getAssociatedColumnValue(be, calEA.getAttributeCode());
+						if (ans != null) {
+							try {
+								be.addAnswer(ans);
+							} catch (BadDataException e) {
+								log.error(e.getStackTrace());
+							}
+						}
+					}
+				}
+			}
+		}
+
+		log.info("Results = " + results.getTotal().toString());
+		return results;
+	}
+
+	public Long performCount(SearchEntity searchBE) {
+
+		System.out.println("Performing count for " + searchBE.getCode());
+
+		QSearchBeResult results = findBySearch25(searchBE, true, false);
+		Long total = results.getTotal();
+
+		// Perform count for any combined search attributes
+		for (EntityAttribute ea : searchBE.getBaseEntityAttributes()) {
+			if (ea.getAttributeCode().startsWith("CMB_")) {
+				String combinedSearchCode = ea.getAttributeCode().substring("CMB_".length());
+				SearchEntity combinedSearch = (SearchEntity) fetchBaseEntityFromCache(combinedSearchCode, serviceToken);
+				Long subTotal = performCount(combinedSearch);
+				if (subTotal != null) {
+					total += subTotal;
+				} else {
+					log.info("subTotal count for " + combinedSearchCode + " is NULL");
+				}
+			}
+		}
+		return total;
+	}
+
 	/**
 	* Perform a safe search using named parameters to
 	* protect from SQL Injection
@@ -79,6 +171,8 @@ public class SearchUtility {
 	* @return					Search Result Object.
 	 */
 	public QSearchBeResult findBySearch25(final SearchEntity searchBE, Boolean countOnly, Boolean fetchEntities) {
+
+		log.info("Performing search for " + searchBE.getCode());
 
 		String realm = this.serviceToken.getRealm();
 		Integer defaultPageSize = 20;
@@ -756,72 +850,6 @@ public class SearchUtility {
 		return exp;
 	}
 
-	public static List<String> getSearchColumnFilterArray(SearchEntity searchBE)
-	{
-		List<String> attributeFilter = new ArrayList<String>();
-		List<String> assocAttributeFilter = new ArrayList<String>();
-
-		for (EntityAttribute ea : searchBE.getBaseEntityAttributes()) {
-			String attributeCode = ea.getAttributeCode();
-			if (attributeCode.startsWith("COL_") || attributeCode.startsWith("CAL_")) {
-				if (attributeCode.equals("COL_PRI_ADDRESS_FULL")) {
-					attributeFilter.add("PRI_ADDRESS_LATITUDE");
-					attributeFilter.add("PRI_ADDRESS_LONGITUDE");
-				}
-				if (attributeCode.startsWith("COL__")) {
-					String[] splitCode = attributeCode.substring("COL__".length()).split("__");
-					assocAttributeFilter.add(splitCode[0]);
-				} else {
-				attributeFilter.add(attributeCode.substring("COL_".length()));
-				}
-			}
-		}
-		attributeFilter.addAll(assocAttributeFilter);
-		return attributeFilter;
-	}
-
-    public static BaseEntity privacyFilter(BaseEntity be, final String[] filterAttributes) {
-        Set<EntityAttribute> allowedAttributes = new HashSet<EntityAttribute>();
-        for (EntityAttribute entityAttribute : be.getBaseEntityAttributes()) {
-            String attributeCode = entityAttribute.getAttributeCode();
-            if (Arrays.stream(filterAttributes).anyMatch(x -> x.equals(attributeCode))) {
-                allowedAttributes.add(entityAttribute);
-            }
-        }
-        // Handle Created and Updated attributes
-        if (Arrays.asList(filterAttributes).contains("PRI_CREATED")) {
-            // log.info("filterAttributes contains PRI_CREATED");
-            Attribute createdAttr = new Attribute("PRI_CREATED", "Created", new DataType(LocalDateTime.class));
-            EntityAttribute created = new EntityAttribute(be, createdAttr, 1.0);
-            created.setValueDateTime(be.getCreated());
-            allowedAttributes.add(created);// allow attributes that starts with "LNK_"
-        }
-        if (Arrays.asList(filterAttributes).contains("PRI_CREATED_DATE")) {
-            // log.info("filterAttributes contains PRI_CREATED_DATE");
-            Attribute createdAttr = new Attribute("PRI_CREATED_DATE", "Created", new DataType(LocalDate.class));
-            EntityAttribute created = new EntityAttribute(be, createdAttr, 1.0);
-            created.setValueDate(be.getCreated().toLocalDate());
-            allowedAttributes.add(created);// allow attributes that starts with "LNK_"
-        }
-        if (Arrays.asList(filterAttributes).contains("PRI_UPDATED")) {
-            // log.info("filterAttributes contains PRI_UPDATED");
-            Attribute updatedAttr = new Attribute("PRI_UPDATED", "Updated", new DataType(LocalDateTime.class));
-            EntityAttribute updated = new EntityAttribute(be, updatedAttr, 1.0);
-            updated.setValueDateTime(be.getUpdated());
-            allowedAttributes.add(updated);// allow attributes that starts with "LNK_"
-        }
-        if (Arrays.asList(filterAttributes).contains("PRI_UPDATED_DATE")) {
-            // log.info("filterAttributes contains PRI_UPDATED_DATE");
-            Attribute updatedAttr = new Attribute("PRI_UPDATED_DATE", "Updated", new DataType(LocalDate.class));
-            EntityAttribute updated = new EntityAttribute(be, updatedAttr, 1.0);
-            updated.setValueDate(be.getUpdated().toLocalDate());
-            allowedAttributes.add(updated);// allow attributes that starts with "LNK_"
-        }
-        be.setBaseEntityAttributes(allowedAttributes);
-
-        return be;
-    }
-
 	/**
 	 * Quick tool to remove any prefix strings from attribute codes, even if the
 	 * prefix occurs multiple times.
@@ -914,6 +942,144 @@ public class SearchUtility {
             e.printStackTrace();
 		}
 		return null;
+	}
+
+	public static List<String> getSearchColumnFilterArray(SearchEntity searchBE)
+	{
+		List<String> attributeFilter = new ArrayList<String>();
+		List<String> assocAttributeFilter = new ArrayList<String>();
+
+		for (EntityAttribute ea : searchBE.getBaseEntityAttributes()) {
+			String attributeCode = ea.getAttributeCode();
+			if (attributeCode.startsWith("COL_") || attributeCode.startsWith("CAL_")) {
+				if (attributeCode.equals("COL_PRI_ADDRESS_FULL")) {
+					attributeFilter.add("PRI_ADDRESS_LATITUDE");
+					attributeFilter.add("PRI_ADDRESS_LONGITUDE");
+				}
+				if (attributeCode.startsWith("COL__")) {
+					String[] splitCode = attributeCode.substring("COL__".length()).split("__");
+					assocAttributeFilter.add(splitCode[0]);
+				} else {
+				attributeFilter.add(attributeCode.substring("COL_".length()));
+				}
+			}
+		}
+		attributeFilter.addAll(assocAttributeFilter);
+		return attributeFilter;
+	}
+
+    public static BaseEntity privacyFilter(BaseEntity be, final String[] filterAttributes) {
+        Set<EntityAttribute> allowedAttributes = new HashSet<EntityAttribute>();
+
+		for (EntityAttribute entityAttribute : be.getBaseEntityAttributes()) {
+			String attributeCode = entityAttribute.getAttributeCode();
+			if (Arrays.stream(filterAttributes).anyMatch(x -> x.equals(attributeCode))) {
+				allowedAttributes.add(entityAttribute);
+			}
+		}
+        // Handle Created and Updated attributes
+        if (Arrays.asList(filterAttributes).contains("PRI_CREATED")) {
+            // log.info("filterAttributes contains PRI_CREATED");
+            Attribute createdAttr = new Attribute("PRI_CREATED", "Created", new DataType(LocalDateTime.class));
+            EntityAttribute created = new EntityAttribute(be, createdAttr, 1.0);
+            created.setValueDateTime(be.getCreated());
+            allowedAttributes.add(created);// allow attributes that starts with "LNK_"
+        }
+        if (Arrays.asList(filterAttributes).contains("PRI_CREATED_DATE")) {
+            // log.info("filterAttributes contains PRI_CREATED_DATE");
+            Attribute createdAttr = new Attribute("PRI_CREATED_DATE", "Created", new DataType(LocalDate.class));
+            EntityAttribute created = new EntityAttribute(be, createdAttr, 1.0);
+            created.setValueDate(be.getCreated().toLocalDate());
+            allowedAttributes.add(created);// allow attributes that starts with "LNK_"
+        }
+        if (Arrays.asList(filterAttributes).contains("PRI_UPDATED")) {
+            // log.info("filterAttributes contains PRI_UPDATED");
+            Attribute updatedAttr = new Attribute("PRI_UPDATED", "Updated", new DataType(LocalDateTime.class));
+            EntityAttribute updated = new EntityAttribute(be, updatedAttr, 1.0);
+            updated.setValueDateTime(be.getUpdated());
+            allowedAttributes.add(updated);// allow attributes that starts with "LNK_"
+        }
+        if (Arrays.asList(filterAttributes).contains("PRI_UPDATED_DATE")) {
+            // log.info("filterAttributes contains PRI_UPDATED_DATE");
+            Attribute updatedAttr = new Attribute("PRI_UPDATED_DATE", "Updated", new DataType(LocalDate.class));
+            EntityAttribute updated = new EntityAttribute(be, updatedAttr, 1.0);
+            updated.setValueDate(be.getUpdated().toLocalDate());
+            allowedAttributes.add(updated);// allow attributes that starts with "LNK_"
+        }
+        be.setBaseEntityAttributes(allowedAttributes);
+
+        return be;
+    }
+
+	public Answer getAssociatedColumnValue(BaseEntity baseBE, String calEACode) {
+
+		String[] calFields = calEACode.substring("COL__".length()).split("__");
+		if (calFields.length == 1) {
+			log.error("CALS length is bad for :" + calEACode);
+			return null;
+		}
+		String linkBeCode = calFields[calFields.length-1];
+
+		BaseEntity be = baseBE;
+
+		Optional<EntityAttribute> associateEa = null;
+		// log.info("calFields value " + calEACode);
+		// log.info("linkBeCode value " + linkBeCode);
+
+		String finalAttributeCode = calEACode.substring("COL_".length());
+		// Fetch The Attribute of the last code
+		String primaryAttrCode = calFields[calFields.length-1];
+		Attribute primaryAttribute = getAttribute(primaryAttrCode, serviceToken);
+
+		Answer ans = new Answer(baseBE.getCode(), baseBE.getCode(), finalAttributeCode, "");
+		Attribute att = new Attribute(finalAttributeCode, primaryAttribute.getName(), primaryAttribute.getDataType());
+		ans.setAttribute(att);
+
+		for (int i = 0; i < calFields.length-1; i++) {
+			String attributeCode = calFields[i];
+			String calBe = be.getValueAsString(attributeCode);
+
+			if (calBe != null && !StringUtils.isBlank(calBe)) {
+				String calVal = calBe.replace("\"", "").replace("[", "").replace("]", "").replace(" ", "");
+				String[] codeArr = calVal.split(",");
+				for (String code : codeArr) {
+					if (StringUtils.isBlank(code)) {
+						log.error("code from Calfields is empty calVal["+calVal+"] skipping calFields=["+calFields+"] - be:"+baseBE.getCode());
+						continue;
+					}
+					BaseEntity associatedBe = fetchBaseEntityFromCache(code, serviceToken);
+					if (associatedBe == null) {
+						log.debug("associatedBe DOES NOT exist ->" + code);
+						return null;
+					}
+
+					if (i == (calFields.length-2)) {
+						associateEa = associatedBe.findEntityAttribute(linkBeCode);
+
+						if (associateEa != null && (associateEa.isPresent() || ("PRI_NAME".equals(linkBeCode)))) {
+							String linkedValue = null;
+							if ("PRI_NAME".equals(linkBeCode)) {
+								linkedValue = associatedBe.getName();
+							} else {
+								linkedValue = associatedBe.getValueAsString(linkBeCode);
+							}
+							if (!ans.getValue().isEmpty()) {
+								linkedValue = ans.getValue() + "," + linkedValue;
+							}
+							ans.setValue(linkedValue);
+						} else {
+							log.debug("No attribute present fo CAL EA");
+						}
+					}
+					be = associatedBe;
+				}
+			} else {
+				log.debug("Could not find attribute value for " + attributeCode + " for entity " + be.getCode());
+				return null;
+			}
+		}
+
+		return ans;
 	}
 
 }
