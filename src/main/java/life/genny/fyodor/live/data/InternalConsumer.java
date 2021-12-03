@@ -7,6 +7,8 @@ import javax.json.bind.Jsonb;
 import javax.json.bind.JsonbBuilder;
 import javax.json.bind.JsonbConfig;
 
+import javax.json.JsonObject;
+
 import org.jboss.logging.Logger;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
@@ -91,14 +93,18 @@ public class InternalConsumer {
 	@Blocking
 	public void getSearchEvents(String data) {
 		log.info("Received incoming Search Event... ");
-		log.info(data);
+		log.debug(data);
 
 		// Deserialize with null values to avoid deserialisation errors
 		JsonbConfig config = new JsonbConfig();
 		Jsonb jsonb = JsonbBuilder.create(config);
 		QSearchMessage msg = jsonb.fromJson(data, QSearchMessage.class);
-		GennyToken userToken = new GennyToken(msg.getToken());
+		// GennyToken userToken = new GennyToken(msg.getToken());
 		SearchEntity searchBE = msg.getSearchEntity();
+		log.info("Token: " + msg.getToken());
+
+		JsonObject jsonObj = jsonb.fromJson(data, JsonObject.class);
+		GennyToken userToken = new GennyToken(jsonObj.getString("token"));
 
 		if (searchBE == null) {
 			log.error("Message did NOT contain a SearchEntity!!!");
@@ -152,12 +158,12 @@ public class InternalConsumer {
 			entityMsg.setTotal(results.getTotal());
 			entityMsg.setReplace(true);
 			entityMsg.setParentCode(searchBE.getCode());
-			entityMsg.setToken(userToken.getToken());
+			entityMsg.setToken(serviceToken.getToken());
 			String json = jsonb.toJson(entityMsg);
 			producer.getToWebCmds().send(json);
 
 			QDataBaseEntityMessage searchBEMsg = new QDataBaseEntityMessage(searchBE);
-			searchBEMsg.setToken(userToken.getToken());
+			searchBEMsg.setToken(serviceToken.getToken());
 			String searchJson = jsonb.toJson(searchBEMsg);
 			producer.getToWebCmds().send(searchJson);
 
