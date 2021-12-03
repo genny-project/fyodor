@@ -99,13 +99,9 @@ public class InternalConsumer {
 		JsonbConfig config = new JsonbConfig();
 		Jsonb jsonb = JsonbBuilder.create(config);
 		QSearchMessage msg = jsonb.fromJson(data, QSearchMessage.class);
-		// GennyToken userToken = new GennyToken(msg.getToken());
+		GennyToken userToken = new GennyToken(msg.getToken());
 		SearchEntity searchBE = msg.getSearchEntity();
 		log.info("Token: " + msg.getToken());
-
-		JsonObject jsonObj = jsonb.fromJson(data, JsonObject.class);
-		GennyToken userToken = new GennyToken(jsonObj.getString("token"));
-		log.info("Token2: " + jsonObj.getString("token"));
 
 		if (searchBE == null) {
 			log.error("Message did NOT contain a SearchEntity!!!");
@@ -155,19 +151,16 @@ public class InternalConsumer {
 
 		} else if (msg.getDestination().equals("webcmds")) {
 
-			log.info("Sending results = " + results.getEntities().length);
-
 			QDataBaseEntityMessage entityMsg = new QDataBaseEntityMessage(results.getEntities());
 			entityMsg.setTotal(results.getTotal());
 			entityMsg.setReplace(true);
 			entityMsg.setParentCode(searchBE.getCode());
-			entityMsg.setToken(serviceToken.getToken());
+			entityMsg.setToken(userToken.getToken());
 			String json = jsonb.toJson(entityMsg);
-			log.info("OUTPUT = " + json);
 			producer.getToWebCmds().send(json);
 
 			QDataBaseEntityMessage searchBEMsg = new QDataBaseEntityMessage(searchBE);
-			searchBEMsg.setToken(serviceToken.getToken());
+			searchBEMsg.setToken(userToken.getToken());
 			String searchJson = jsonb.toJson(searchBEMsg);
 			producer.getToWebCmds().send(searchJson);
 
