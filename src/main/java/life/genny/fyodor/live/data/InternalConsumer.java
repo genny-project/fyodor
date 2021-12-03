@@ -105,6 +105,7 @@ public class InternalConsumer {
 
 		JsonObject jsonObj = jsonb.fromJson(data, JsonObject.class);
 		GennyToken userToken = new GennyToken(jsonObj.getString("token"));
+		log.info("Token2: " + jsonObj.getString("token"));
 
 		if (searchBE == null) {
 			log.error("Message did NOT contain a SearchEntity!!!");
@@ -153,6 +154,8 @@ public class InternalConsumer {
 			producer.getToSearchData().send(json);
 
 		} else if (msg.getDestination().equals("webcmds")) {
+
+			log.info("Sending results = " + results.getEntities());
 
 			QDataBaseEntityMessage entityMsg = new QDataBaseEntityMessage(results.getEntities());
 			entityMsg.setTotal(results.getTotal());
