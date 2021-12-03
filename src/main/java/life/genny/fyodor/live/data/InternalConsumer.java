@@ -155,7 +155,7 @@ public class InternalConsumer {
 
 		} else if (msg.getDestination().equals("webcmds")) {
 
-			log.info("Sending results = " + results.getEntities());
+			log.info("Sending results = " + results.getEntities().length);
 
 			QDataBaseEntityMessage entityMsg = new QDataBaseEntityMessage(results.getEntities());
 			entityMsg.setTotal(results.getTotal());
@@ -163,6 +163,7 @@ public class InternalConsumer {
 			entityMsg.setParentCode(searchBE.getCode());
 			entityMsg.setToken(serviceToken.getToken());
 			String json = jsonb.toJson(entityMsg);
+			log.info("OUTPUT = " + json);
 			producer.getToWebCmds().send(json);
 
 			QDataBaseEntityMessage searchBEMsg = new QDataBaseEntityMessage(searchBE);
