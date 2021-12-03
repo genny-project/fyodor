@@ -3,6 +3,7 @@ package life.genny.fyodor.endpoints;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
+import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
@@ -58,6 +59,9 @@ public class SearchEndpoint {
 	@ConfigProperty(name = "genny.oidc.credentials.secret", defaultValue = "secret")
 	String secret;
 
+	@ConfigProperty(name = "project.version", defaultValue = "unknown")
+	String version;
+
 	@Context
 	HttpServerRequest request;
 
@@ -86,6 +90,14 @@ public class SearchEndpoint {
     void onStop(@Observes ShutdownEvent ev) {
         log.info("The Search API is stopping...");
     }
+
+
+	@GET
+	@Path("/api/version")
+	public Response version() {
+		return Response.ok().entity("version: \""+version+"\"").build();
+	}
+
 	/**
 	 * 
 	 * A POST request for search results based on a SearchEntity
