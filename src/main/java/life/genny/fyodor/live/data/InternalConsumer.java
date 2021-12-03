@@ -91,7 +91,7 @@ public class InternalConsumer {
 	@Blocking
 	public void getSearchEvents(String data) {
 		log.info("Received incoming Search Event... ");
-		log,info(data);
+		log.info(data);
 
 		// Deserialize with null values to avoid deserialisation errors
 		JsonbConfig config = new JsonbConfig();
