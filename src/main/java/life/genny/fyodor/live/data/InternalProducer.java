@@ -28,4 +28,9 @@ public class InternalProducer {
     return webCmds;
   }
 
+  @Inject @Channel("webdataout") Emitter<String> webData;
+  public Emitter<String> getToWebData() {
+    return webData;
+  }
+
 }

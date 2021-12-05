@@ -162,7 +162,7 @@ public class InternalConsumer {
 			QDataBaseEntityMessage searchBEMsg = new QDataBaseEntityMessage(searchBE);
 			searchBEMsg.setToken(userToken.getToken());
 			String searchJson = jsonb.toJson(searchBEMsg);
-			producer.getToWebCmds().send(searchJson);
+			producer.getToWebData().send(searchJson);
 
 		}
 	}
