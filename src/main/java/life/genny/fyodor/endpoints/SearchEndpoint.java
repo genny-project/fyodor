@@ -23,12 +23,11 @@ import io.quarkus.runtime.ShutdownEvent;
 import io.vertx.core.http.HttpServerRequest;
 
 import life.genny.fyodor.utils.SearchUtility;
-import life.genny.fyodor.utils.KeycloakUtils;
-import life.genny.fyodor.models.GennyToken;
+
 import life.genny.qwandaq.entity.SearchEntity;
 import life.genny.qwandaq.message.QSearchBeResult;
-import life.genny.qwandaq.message.QDataBaseEntityMessage;
-
+import life.genny.qwandaq.models.GennyToken;
+import life.genny.qwandaq.utils.KeycloakUtils;
 import life.genny.fyodor.service.ApiService;
 
 /**

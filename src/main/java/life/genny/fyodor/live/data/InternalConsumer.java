@@ -6,31 +6,27 @@ import javax.inject.Inject;
 import javax.json.bind.Jsonb;
 import javax.json.bind.JsonbBuilder;
 import javax.json.bind.JsonbConfig;
+import javax.persistence.EntityManager;
 
-import javax.json.JsonObject;
-
-import org.jboss.logging.Logger;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
+import org.jboss.logging.Logger;
 
-import io.quarkus.runtime.StartupEvent;
 import io.quarkus.runtime.ShutdownEvent;
+import io.quarkus.runtime.StartupEvent;
 import io.smallrye.reactive.messaging.annotations.Blocking;
-
-import life.genny.fyodor.models.GennyToken;
-import life.genny.fyodor.utils.SearchUtility;
-import life.genny.fyodor.utils.KeycloakUtils;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-
-import life.genny.qwandaq.entity.SearchEntity;
-import life.genny.qwandaq.entity.BaseEntity;
-import life.genny.qwandaq.message.QSearchMessage;
-import life.genny.qwandaq.message.QSearchBeResult;
-import life.genny.qwandaq.message.QDataBaseEntityMessage;
-import life.genny.qwandaq.attribute.EntityAttribute;
-
-import javax.persistence.EntityManager;
 import life.genny.fyodor.service.ApiService;
+import life.genny.fyodor.utils.SearchUtility;
+import life.genny.qwandaq.attribute.Attribute;
+import life.genny.qwandaq.attribute.EntityAttribute;
+import life.genny.qwandaq.entity.SearchEntity;
+import life.genny.qwandaq.exception.BadDataException;
+import life.genny.qwandaq.message.QDataBaseEntityMessage;
+import life.genny.qwandaq.message.QSearchBeResult;
+import life.genny.qwandaq.message.QSearchMessage;
+import life.genny.qwandaq.models.GennyToken;
+import life.genny.qwandaq.utils.KeycloakUtils;
 
 @ApplicationScoped
 public class InternalConsumer {
@@ -158,6 +154,15 @@ public class InternalConsumer {
 			entityMsg.setToken(userToken.getToken());
 			String json = jsonb.toJson(entityMsg);
 			producer.getToWebCmds().send(json);
+
+			try {
+				Attribute attrTotalResults = search.getAttribute("PRI_TOTAL_RESULTS", userToken);
+				searchBE.addAnswer(new life.genny.qwandaq.Answer(searchBE, searchBE, attrTotalResults,
+						results.getTotal() + ""));
+			} catch (BadDataException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 
 			QDataBaseEntityMessage searchBEMsg = new QDataBaseEntityMessage(searchBE);
 			searchBEMsg.setToken(userToken.getToken());
