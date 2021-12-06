@@ -17,5 +17,5 @@ echo $GENNY_SERVICE_PASSWORD
 # echo $GENNY_MYSQL_PORT
 # echo $GENNY_MYSQL_DB
 
-./mvnw  quarkus:dev -Ddebug=5557
+./mvnw  quarkus:dev -Ddebug=5558
 
