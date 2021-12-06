@@ -496,6 +496,9 @@ public class SearchUtility {
 		// Set page start and page size, then fetch codes
 		query.offset(pageStart).limit(pageSize);
 
+		Instant middle = Instant.now();
+		log.info("Finished BUILDING query with duration: " + Duration.between(start, middle).toMillis() + " millSeconds.");
+
 		if (countOnly) {
 			// Fetch only the count
 			long count = query.select(baseEntity.code).distinct().fetchCount();
@@ -524,7 +527,7 @@ public class SearchUtility {
 			}
 		}
 		Instant end = Instant.now();
-		log.info("Finished DB query with duration: " + Duration.between(start, end).toMillis() + " millSeconds.");
+		log.info("Finished RUNNING query with duration: " + Duration.between(middle, end).toMillis() + " millSeconds.");
 		// Return codes and count
 		log.info("SQL = " + query.toString());
 		return result;
