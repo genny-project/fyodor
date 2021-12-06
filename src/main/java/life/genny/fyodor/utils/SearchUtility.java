@@ -71,6 +71,7 @@ public class SearchUtility {
 
 	public QSearchBeResult processSearchEntity(SearchEntity searchBE) {
 
+		Instant start = Instant.now();
 		QSearchBeResult results = null;
 
 		// Check for a specific item search
@@ -132,7 +133,8 @@ public class SearchUtility {
 				}
 			}
 		}
-
+		Instant end = Instant.now();
+		log.info("Finished processing search with duration: " + Duration.between(start, end).toMillis() + " millSeconds.");
 		log.info("Results = " + results.getTotal().toString());
 		return results;
 	}
@@ -173,6 +175,7 @@ public class SearchUtility {
 	public QSearchBeResult findBySearch25(final SearchEntity searchBE, Boolean countOnly, Boolean fetchEntities) {
 
 		log.info("Performing search for " + searchBE.getCode());
+		Instant start = Instant.now();
 
 		String realm = this.serviceToken.getRealm();
 		Integer defaultPageSize = 20;
@@ -444,9 +447,6 @@ public class SearchUtility {
 			}
 		}
 
-		Instant start = Instant.now();
-		String debugStr = "Search25DEBUG";
-		log.info(debugStr + " Start building link join");
 		// Build link join if necessary
 		if (sourceCode != null || targetCode != null || linkCode != null || linkValue != null) {
 			QEntityEntity linkJoin = new QEntityEntity("linkJoin");
@@ -496,12 +496,9 @@ public class SearchUtility {
 		// Set page start and page size, then fetch codes
 		query.offset(pageStart).limit(pageSize);
 
-		Instant end = Instant.now();
-		Duration timeElapsed = Duration.between(start, end);
-		log.info(debugStr + " Finished building link join, cost:" + timeElapsed.toMillis() + " millSeconds.");
+		Instant middle = Instant.now();
+		log.info("Finished BUILDING query with duration: " + Duration.between(start, middle).toMillis() + " millSeconds.");
 
-		start = Instant.now();
-		log.info(debugStr + " Start query, countOnly=" + countOnly);
 		if (countOnly) {
 			// Fetch only the count
 			long count = query.select(baseEntity.code).distinct().fetchCount();
@@ -529,8 +526,8 @@ public class SearchUtility {
 				result.setEntities(beArray);
 			}
 		}
-		end = Instant.now();
-		log.info(debugStr + " Finished building link join, cost:" + Duration.between(start, end).toMillis() + " millSeconds.");
+		Instant end = Instant.now();
+		log.info("Finished RUNNING query with duration: " + Duration.between(middle, end).toMillis() + " millSeconds.");
 		// Return codes and count
 		log.info("SQL = " + query.toString());
 		return result;
