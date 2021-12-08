@@ -37,7 +37,6 @@ import com.querydsl.jpa.JPQLQuery;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
-import life.genny.fyodor.models.GennyToken;
 import life.genny.qwandaq.attribute.Attribute;
 import life.genny.qwandaq.attribute.EntityAttribute;
 import life.genny.qwandaq.entity.SearchEntity;
@@ -48,6 +47,7 @@ import life.genny.qwandaq.entity.QBaseEntity;
 import life.genny.qwandaq.EEntityStatus;
 import life.genny.qwandaq.entity.QEntityEntity;
 import life.genny.qwandaq.message.QSearchBeResult;
+import life.genny.qwandaq.models.GennyToken;
 import life.genny.fyodor.service.ApiService;
 import life.genny.qwandaq.Answer;
 import life.genny.qwandaq.exception.BadDataException;
