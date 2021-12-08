@@ -25,7 +25,8 @@ import org.jboss.logging.Logger;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import io.quarkus.runtime.StartupEvent;
-import life.genny.fyodor.models.GennyToken;
+import life.genny.qwandaq.models.GennyToken;
+import life.genny.qwandaq.utils.KeycloakUtils;
 import life.genny.qwandaq.attribute.Attribute;
 import life.genny.qwandaq.attribute.EntityAttribute;
 import life.genny.qwandaq.datatype.DataType;

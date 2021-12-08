@@ -51,6 +51,7 @@ import life.genny.qwandaq.models.GennyToken;
 import life.genny.fyodor.service.ApiService;
 import life.genny.qwandaq.Answer;
 import life.genny.qwandaq.exception.BadDataException;
+import life.genny.qwandaq.utils.KeycloakUtils;
 
 @ApplicationScoped
 public class SearchUtility {

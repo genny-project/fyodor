@@ -143,7 +143,7 @@ public class InternalConsumer {
 			producer.getToWebCmds().send(json);
 
 			try {
-				Attribute attrTotalResults = search.getAttribute("PRI_TOTAL_RESULTS", userToken);
+				Attribute attrTotalResults = cacheUtils.getAttribute("PRI_TOTAL_RESULTS");
 				searchBE.addAnswer(new life.genny.qwandaq.Answer(searchBE, searchBE, attrTotalResults,
 						results.getTotal() + ""));
 			} catch (BadDataException e) {
