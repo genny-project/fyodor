@@ -2,8 +2,6 @@ package life.genny.fyodor.utils;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.Comparator;
 import java.util.Collections;
@@ -14,15 +12,18 @@ import java.util.UUID;
 import java.util.Arrays;
 import java.util.Optional;
 
-import javax.transaction.Transactional;
+import javax.enterprise.context.ApplicationScoped;
+import javax.enterprise.event.Observes;
+import javax.inject.Inject;
 import javax.json.JsonObject;
 import javax.json.bind.Jsonb;
 import javax.json.bind.JsonbBuilder;
 import javax.persistence.EntityManager;
-import javax.persistence.NoResultException;
 
 import org.apache.commons.lang3.StringUtils;
 import org.jboss.logging.Logger;
+
+import io.quarkus.runtime.StartupEvent;
 
 import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.core.types.dsl.ComparableExpressionBase;
@@ -32,6 +33,9 @@ import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Predicate;
 import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.JPQLQuery;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import life.genny.fyodor.models.GennyToken;
 import life.genny.qwandaq.attribute.Attribute;
@@ -48,26 +52,46 @@ import life.genny.fyodor.service.ApiService;
 import life.genny.qwandaq.Answer;
 import life.genny.qwandaq.exception.BadDataException;
 
-// @ApplicationScoped
+@ApplicationScoped
 public class SearchUtility {
 
 	private static final Logger log = Logger.getLogger(SearchUtility.class);
 
-	ApiService apiService;
+	@ConfigProperty(name = "genny.keycloak.url", defaultValue = "https://keycloak.gada.io")
+	String baseKeycloakUrl;
 
+	@ConfigProperty(name = "genny.keycloak.realm", defaultValue = "genny")
+	String keycloakRealm;
+
+	@ConfigProperty(name = "genny.service.username", defaultValue = "service")
+	String serviceUsername;
+
+	@ConfigProperty(name = "genny.service.password", defaultValue = "password")
+	String servicePassword;
+
+	@ConfigProperty(name = "genny.oidc.client-id", defaultValue = "backend")
+	String clientId;
+
+	@ConfigProperty(name = "genny.oidc.credentials.secret", defaultValue = "secret")
+	String secret;
+
+	@Inject
 	EntityManager entityManager;
+
+	@Inject
+	@RestClient
+	ApiService apiService;
 
 	GennyToken serviceToken;
 
 	Jsonb jsonb = JsonbBuilder.create();
 
-    static public Map<String,Map<String, Attribute>> realmAttributeMap = new ConcurrentHashMap<>();
+	@Inject
+	CacheUtils cacheUtils;
 
-	public SearchUtility(GennyToken serviceToken, EntityManager entityManager, ApiService apiService) {
-		this.serviceToken = serviceToken;
-		this.entityManager = entityManager;
-		this.apiService = apiService;
-	}
+    void onStart(@Observes StartupEvent ev) {
+		serviceToken = new KeycloakUtils().getToken(baseKeycloakUrl, keycloakRealm, clientId, secret, serviceUsername, servicePassword, null);
+    }
 
 	public QSearchBeResult processSearchEntity(SearchEntity searchBE) {
 
@@ -431,7 +455,7 @@ public class SearchUtility {
 				orderColumn = baseEntity.name;
 			} else {
 				// Use Attribute Code to find the datatype, and thus the DB field to sort on
-				Attribute attr = getAttribute(attributeCode.substring("SRT_".length()), serviceToken);
+				Attribute attr = cacheUtils.getAttribute(attributeCode.substring("SRT_".length()));
 				String dtt = attr.getDataType().getClassName();
 				orderColumn = getPathFromDatatype(dtt, eaOrderJoin);
 			}
@@ -821,7 +845,6 @@ public class SearchUtility {
 		QBaseEntity baseEntity = new QBaseEntity("baseEntity_"+uuid);
 		QEntityAttribute entityAttribute = new QEntityAttribute("entityAttribute_"+uuid);
 
-
 		JPQLQuery exp = JPAExpressions.selectDistinct(baseEntity.code)
 			.from(baseEntity)
 			.leftJoin(entityAttribute);
@@ -874,69 +897,6 @@ public class SearchUtility {
 			value = json.getString("value");
 			// log.info(value);
 			return jsonb.fromJson(value, BaseEntity.class);
-		}
-		return null;
-	}
-
-    public Attribute getAttribute(final String attributeCode, final GennyToken gennyToken) {
-
-    	String realm = gennyToken.getRealm();
-
-    	if (realmAttributeMap.get(gennyToken.getRealm())==null) {
-    		loadAllAttributesIntoCache(gennyToken);
-    	}
-
-        Attribute attribute = realmAttributeMap.get(realm).get(attributeCode);
-
-		if (attribute == null) {
-			log.error("Bad Attribute in Map for realm " +realm + " and code " + attributeCode);
-		}
-
-        return attribute;
-    }
-
-    public void loadAllAttributesIntoCache(final GennyToken gennyToken) {
-
-		String realm = gennyToken.getRealm();
-
-		log.info("About to load all attributes for realm " + realm);
-
-		List<Attribute> attributeList = findAttributes(gennyToken);
-
-		if (attributeList == null) {
-			log.error("Null attributeList, not putting in map!!!");
-			return;
-		}
-
-		if (!realmAttributeMap.containsKey(realm)) {
-			realmAttributeMap.put(realm, new ConcurrentHashMap<String,Attribute>());
-		}
-		Map<String,Attribute> attributeMap = realmAttributeMap.get(realm);
-
-		for (Attribute attribute : attributeList) {
-			attributeMap.put(attribute.getCode(), attribute);
-		}
-
-		// realmAttributeMap.put(realm, attributeMap);
-
-		log.info("All attributes have been loaded in from DB: " + attributeMap.size() + " attributes loaded!");
-
-    }
-
-	@Transactional
-	public List<Attribute> findAttributes(GennyToken gennyToken) throws NoResultException {
-
-        try {
-
-			final List<Attribute> results = entityManager.createQuery("SELECT a FROM Attribute a where a.realm=:realmStr and a.name not like 'App\\_%'")
-					.setParameter("realmStr", gennyToken.getRealm())
-					.getResultList();
-
-			return results;
-
-        } catch (NoResultException e) {
-            log.error("No results found from DB search");
-            e.printStackTrace();
 		}
 		return null;
 	}
@@ -1026,7 +986,7 @@ public class SearchUtility {
 		String finalAttributeCode = calEACode.substring("COL_".length());
 		// Fetch The Attribute of the last code
 		String primaryAttrCode = calFields[calFields.length-1];
-		Attribute primaryAttribute = getAttribute(primaryAttrCode, serviceToken);
+		Attribute primaryAttribute = cacheUtils.getAttribute(primaryAttrCode);
 
 		Answer ans = new Answer(baseBE.getCode(), baseBE.getCode(), finalAttributeCode, "");
 		Attribute att = new Attribute(finalAttributeCode, primaryAttribute.getName(), primaryAttribute.getDataType());

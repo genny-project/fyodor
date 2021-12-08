@@ -19,6 +19,7 @@ import io.smallrye.reactive.messaging.annotations.Blocking;
 
 import life.genny.fyodor.models.GennyToken;
 import life.genny.fyodor.utils.SearchUtility;
+import life.genny.fyodor.utils.CacheUtils;
 import life.genny.fyodor.utils.KeycloakUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
@@ -55,9 +56,6 @@ public class InternalConsumer {
 	@ConfigProperty(name = "genny.oidc.credentials.secret", defaultValue = "secret")
 	String secret;
 
-	@ConfigProperty(name = "quarkus.datasource.jdbc.url")
-	String uri;
-
 	@Inject
 	InternalProducer producer;
 
@@ -66,27 +64,15 @@ public class InternalConsumer {
 	ApiService apiService;
 
 	@Inject
-	EntityManager entityManager;
-
 	SearchUtility search;
 
 	GennyToken serviceToken;
 
+	@Inject
+	CacheUtils cacheUtils;
+
     void onStart(@Observes StartupEvent ev) {
-        log.info("The Consumer is starting...");
-
-		log.info("SQL URL = " + uri);
-
-		// Initialise token, search util and attribute map
 		serviceToken = new KeycloakUtils().getToken(baseKeycloakUrl, keycloakRealm, clientId, secret, serviceUsername, servicePassword, null);
-		search = new SearchUtility(serviceToken, entityManager, apiService);
-		search.loadAllAttributesIntoCache(serviceToken);
-
-        log.info("Finished Consumer Setup!");
-    }
-
-    void onStop(@Observes ShutdownEvent ev) {
-        log.info("The Consumer is stopping...");
     }
 
 	@Incoming("search_events")

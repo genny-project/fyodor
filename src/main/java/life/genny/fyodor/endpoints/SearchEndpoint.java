@@ -23,6 +23,7 @@ import io.quarkus.runtime.ShutdownEvent;
 import io.vertx.core.http.HttpServerRequest;
 
 import life.genny.fyodor.utils.SearchUtility;
+import life.genny.fyodor.utils.CacheUtils;
 import life.genny.fyodor.utils.KeycloakUtils;
 import life.genny.fyodor.models.GennyToken;
 import life.genny.qwandaq.entity.SearchEntity;
@@ -44,21 +45,6 @@ public class SearchEndpoint {
 	@ConfigProperty(name = "genny.keycloak.url", defaultValue = "https://keycloak.gada.io")
 	String baseKeycloakUrl;
 
-	@ConfigProperty(name = "genny.keycloak.realm", defaultValue = "genny")
-	String keycloakRealm;
-
-	@ConfigProperty(name = "genny.service.username", defaultValue = "service")
-	String serviceUsername;
-
-	@ConfigProperty(name = "genny.service.password", defaultValue = "password")
-	String servicePassword;
-
-	@ConfigProperty(name = "genny.oidc.client-id", defaultValue = "backend")
-	String clientId;
-
-	@ConfigProperty(name = "genny.oidc.credentials.secret", defaultValue = "secret")
-	String secret;
-
 	@ConfigProperty(name = "project.version", defaultValue = "unknown")
 	String version;
 
@@ -72,26 +58,17 @@ public class SearchEndpoint {
 	@Inject
 	EntityManager entityManager;
 
+	@Inject
+	CacheUtils cacheUtils;
+
+	@Inject
 	SearchUtility search;
 
-	GennyToken serviceToken;
-
-    void onStart(@Observes StartupEvent ev) {
-        log.info("The Search API is starting...");
-
-		// Initialise token, search util and attribute map
-		serviceToken = new KeycloakUtils().getToken(baseKeycloakUrl, keycloakRealm, clientId, secret, serviceUsername, servicePassword, null);
-		search = new SearchUtility(serviceToken, entityManager, apiService);
-		search.loadAllAttributesIntoCache(serviceToken);
-
-        log.info("Finished API Setup!");
-    }
-
-    void onStop(@Observes ShutdownEvent ev) {
-        log.info("The Search API is stopping...");
-    }
-
-
+	/**
+	* A GET request for the running fyodor version
+	*
+	* @return 	version data
+	 */
 	@GET
 	@Path("/api/version")
 	public Response version() {
