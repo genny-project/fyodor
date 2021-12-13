@@ -47,6 +47,8 @@ import life.genny.qwandaq.entity.QBaseEntity;
 import life.genny.qwandaq.EEntityStatus;
 import life.genny.qwandaq.entity.QEntityEntity;
 import life.genny.qwandaq.message.QSearchBeResult;
+import life.genny.qwandaq.message.QBulkMessage;
+import life.genny.qwandaq.message.QDataBaseEntityMessage;
 import life.genny.qwandaq.models.GennyToken;
 import life.genny.fyodor.service.ApiService;
 import life.genny.qwandaq.Answer;
@@ -76,6 +78,9 @@ public class SearchUtility {
 	@ConfigProperty(name = "genny.oidc.credentials.secret", defaultValue = "secret")
 	String secret;
 
+	@ConfigProperty(name = "genny.service.cache.db", defaultValue = "false")
+	Boolean cacheDB;
+
 	@Inject
 	EntityManager entityManager;
 
@@ -94,9 +99,8 @@ public class SearchUtility {
 		serviceToken = new KeycloakUtils().getToken(baseKeycloakUrl, keycloakRealm, clientId, secret, serviceUsername, servicePassword, null);
     }
 
-	public QSearchBeResult processSearchEntity(SearchEntity searchBE) {
+	public QBulkMessage processSearchEntity(SearchEntity searchBE, GennyToken userToken) {
 
-		Instant start = Instant.now();
 		QSearchBeResult results = null;
 
 		// Check for a specific item search
@@ -104,6 +108,7 @@ public class SearchUtility {
 			if (attr.getAttributeCode().equals("PRI_CODE") && attr.getAttributeName().equals("_EQ_")) {
 				log.info("SINGLE BASE ENTITY SEARCH DETECTED");
 				// result = new JsonArray("[\""+attr.getValue()+"\"]");
+
 				BaseEntity be = fetchBaseEntityFromCache(attr.getValue(), serviceToken);
 				be.setIndex(0);
 				BaseEntity[] arr = new BaseEntity[1];
@@ -158,15 +163,50 @@ public class SearchUtility {
 				}
 			}
 		}
-		Instant end = Instant.now();
-		log.info("Finished processing search with duration: " + Duration.between(start, end).toMillis() + " millSeconds.");
+
+		// Perform count for any combined search attributes
+		Long totalResultCount = 0L;
+		for (EntityAttribute ea : searchBE.getBaseEntityAttributes()) {
+			if (ea.getAttributeCode().startsWith("CMB_")) {
+				String combinedSearchCode = ea.getAttributeCode().substring("CMB_".length());
+				SearchEntity combinedSearch = (SearchEntity) fetchFromCache(combinedSearchCode, SearchEntity.class, serviceToken);
+				Long subTotal = performCount(combinedSearch);
+				if (subTotal != null) {
+					totalResultCount += subTotal;
+					results.setTotal(totalResultCount);
+				} else {
+					log.info("subTotal count for " + combinedSearchCode + " is NULL");
+				}
+			}
+		}
+
+		try {
+			Attribute attrTotalResults = cacheUtils.getAttribute("PRI_TOTAL_RESULTS");
+			searchBE.addAnswer(new Answer(searchBE, searchBE, attrTotalResults, results.getTotal() + ""));
+		} catch (BadDataException e) {
+			log.error(e.getStackTrace());
+		}
+
 		log.info("Results = " + results.getTotal().toString());
-		return results;
+
+		QBulkMessage bulkMsg = new QBulkMessage();
+		bulkMsg.setToken(userToken.getToken());
+
+		QDataBaseEntityMessage searchBEMsg = new QDataBaseEntityMessage(searchBE);
+		searchBEMsg.setToken(userToken.getToken());
+		bulkMsg.add(searchBEMsg);
+
+		QDataBaseEntityMessage entityMsg = new QDataBaseEntityMessage(results.getEntities());
+		entityMsg.setTotal(results.getTotal());
+		entityMsg.setReplace(true);
+		entityMsg.setParentCode(searchBE.getCode());
+		entityMsg.setToken(userToken.getToken());
+		bulkMsg.add(entityMsg);
+
+		return bulkMsg;
 	}
 
 	public Long performCount(SearchEntity searchBE) {
-
-		System.out.println("Performing count for " + searchBE.getCode());
 
 		QSearchBeResult results = findBySearch25(searchBE, true, false);
 		Long total = results.getTotal();
@@ -175,7 +215,7 @@ public class SearchUtility {
 		for (EntityAttribute ea : searchBE.getBaseEntityAttributes()) {
 			if (ea.getAttributeCode().startsWith("CMB_")) {
 				String combinedSearchCode = ea.getAttributeCode().substring("CMB_".length());
-				SearchEntity combinedSearch = (SearchEntity) fetchBaseEntityFromCache(combinedSearchCode, serviceToken);
+				SearchEntity combinedSearch = (SearchEntity) fetchFromCache(combinedSearchCode, SearchEntity.class, serviceToken);
 				Long subTotal = performCount(combinedSearch);
 				if (subTotal != null) {
 					total += subTotal;
@@ -199,7 +239,6 @@ public class SearchUtility {
 	 */
 	public QSearchBeResult findBySearch25(final SearchEntity searchBE, Boolean countOnly, Boolean fetchEntities) {
 
-		log.info("Performing search for " + searchBE.getCode());
 		Instant start = Instant.now();
 
 		String realm = this.serviceToken.getRealm();
@@ -542,7 +581,12 @@ public class SearchUtility {
 				for (int i = 0; i < codes.size(); i++) {
 
 					String code = codes.get(i);
-					BaseEntity be = fetchBaseEntityFromCache(code, serviceToken);
+					BaseEntity be = null;
+					if (cacheDB) {
+						be = fetchBaseEntityFromCache(code, serviceToken);
+					} else {
+						be = cacheUtils.getBaseEntityByCode(code);
+					}
 					be = privacyFilter(be, filterArray);
 					be.setIndex(i);
 					beArray[i] = be;
@@ -898,6 +942,20 @@ public class SearchUtility {
 			value = json.getString("value");
 			// log.info(value);
 			return jsonb.fromJson(value, BaseEntity.class);
+		}
+		return null;
+	}
+
+	public Object fetchFromCache(final String code, Class clazz, final GennyToken token) {
+		String data = null;
+		String value = null;
+
+		data = apiService.getDataFromCache(token.getRealm(), code, "Bearer " + token.getToken());
+		JsonObject json = jsonb.fromJson(data, JsonObject.class);
+		if ("ok".equalsIgnoreCase(json.getString("status"))) {
+			value = json.getString("value");
+			// log.info(value);
+			return jsonb.fromJson(value, clazz);
 		}
 		return null;
 	}

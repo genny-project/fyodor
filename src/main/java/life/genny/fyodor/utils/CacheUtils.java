@@ -9,6 +9,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.LocalTime;
 
 import javax.json.bind.Jsonb;
 import javax.json.bind.JsonbBuilder;
@@ -32,6 +35,7 @@ import life.genny.qwandaq.attribute.EntityAttribute;
 import life.genny.qwandaq.datatype.DataType;
 import life.genny.qwandaq.converter.ValidationListConverter;
 import life.genny.qwandaq.entity.BaseEntity;
+import life.genny.qwandaq.exception.BadDataException;
 import life.genny.qwandaq.EEntityStatus;
 import life.genny.qwandaq.validation.Validation;
 
@@ -80,6 +84,13 @@ public class CacheUtils {
         log.info("The Cache is starting...");
 		serviceToken = new KeycloakUtils().getToken(baseKeycloakUrl, keycloakRealm, clientId, secret, serviceUsername, servicePassword, null);
 		loadAllAttributesFromCache();
+
+		// BaseEntity be = getBaseEntityByCode("PER_FA30B9EB-BF0C-45DF-AB0E-DE61CCD9A735");
+		// if (be != null) {
+		// 	log.info("BE CODE = " + be.getCode());
+		// 	log.info("NUMM ATTRS = " + be.getBaseEntityAttributes().size());
+		// }
+
     }
 
     public Attribute getAttribute(final String attributeCode) {
@@ -140,52 +151,12 @@ public class CacheUtils {
 		return response;
 	}
 
-	public int indexOf(JsonArray arr, String item) {
-		for (int i = 0; i < arr.size(); i++) {
-			if (arr.getString(i).equals(item)) {
-				return i;
-			}
-		}
-		return -1;
-	}
-
-	public String getString(JsonArray arr, String key, JsonArray columnNames) {
-		int index = indexOf(columnNames, key);
-		if (index > -1) {
-			if (!arr.isNull(index)) {
-				return arr.getString(index);
-			}
-		}
-		return null;
-	}
-
-	public Integer getInteger(JsonArray arr, String key, JsonArray columnNames) {
-		int index = indexOf(columnNames, key);
-		if (index > -1) {
-			if (!arr.isNull(index)) {
-				return arr.getInt(index);
-			}
-		}
-		return null;
-	}
-
-	public Boolean getBoolean(JsonArray arr, String key, JsonArray columnNames) {
-		int index = indexOf(columnNames, key);
-		if (index > -1) {
-			if (!arr.isNull(index)) {
-				return arr.getInt(index) == 1;
-			}
-		}
-		return null;
-	}
-
     public void loadAllAttributesFromCache() {
 
 		String realm = serviceToken.getRealm();
+		List<Attribute> attributeList = null;
 
 		log.info("About to load all attributes for realm " + realm);
-
-		List<Attribute> attributeList = null;
 
 		if (cacheDB) {
 			// Fetch from Database
@@ -244,7 +215,7 @@ public class CacheUtils {
 
 					Attribute attribute = new Attribute(code, name, dataType);
 
-					Long id = Long.valueOf(getInteger(row, "ID", columnNames));
+					Long id = getLong(row, "ID", columnNames);
 					String defaultValue = getString(row, "DEFAULTVALUE", columnNames);
 					Boolean defaultPrivacyFlag = getBoolean(row, "DEFAULTPRIVACYFLAG", columnNames);
 					String description = getString(row, "DESCRIPTION", columnNames);
@@ -291,6 +262,7 @@ public class CacheUtils {
 		log.info("All attributes have been loaded in from " + location + ": " + attributeMap.size() + " attributes loaded!");
     }
 
+
 	@Transactional
 	public List<Attribute> fetchAttributesFromDB() throws NoResultException {
 
@@ -309,6 +281,7 @@ public class CacheUtils {
 		return null;
 	}
 
+
 	/**
 	* Get a BaseEntity from the KSQLDB cache
 	*
@@ -316,7 +289,193 @@ public class CacheUtils {
 	* @return			BaseEntity
 	 */
 	public BaseEntity getBaseEntityByCode(final String code) {
-		// TODO: Complete this method
+
+		String requestBody = "{ \"sql\": \"SELECT * FROM BASEENTITY_ATTRIBUTE WHERE BASEENTITYCODE=\'"+code+"\' ;\" }";
+
+		String uri = host + ":" + port.toString() + "/query-stream";
+
+		HttpClient client = HttpClient.newHttpClient();
+		HttpRequest request = HttpRequest.newBuilder()
+			.uri(URI.create(uri))
+			.setHeader("Content-Type", "application/json; charset=utf-8")
+			.POST(HttpRequest.BodyPublishers.ofString(requestBody))
+			.build();
+
+		String body = null;
+
+		try {
+			HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+			body = response.body();
+			log.info(body);
+		} catch (IOException | InterruptedException e) {
+			log.error(e.getLocalizedMessage());
+		}
+
+		if (body == null || body.isBlank()) {
+			log.error("Could not fetch entity: " + code);
+			return null;
+		}
+
+		JsonObject header = jsonb.fromJson(body, JsonObject.class);
+		List<JsonArray> rows = parseJsonRows(body);
+
+		if (rows.size() == 0) {
+			log.error("No rows returned for KSQLDB entity query");
+			return null;
+		}
+
+		JsonArray columnNames = header.getJsonArray("columnNames");
+
+		String entityCode = getString(rows.get(0), "BASEENTITYCODE", columnNames);
+		String name = getString(rows.get(0), "NAME", columnNames);
+
+		BaseEntity entity = new BaseEntity(entityCode, name);
+
+		Integer statusOrdinal = getInteger(rows.get(0), "STATUS", columnNames);
+		if (statusOrdinal == null) {
+			statusOrdinal = 0;
+		}
+		EEntityStatus status = EEntityStatus.values()[statusOrdinal];
+		entity.setStatus(status);
+
+		for (JsonArray row : rows) {
+
+			String attributeCode = getString(row, "ATTRIBUTECODE", columnNames);
+			Double weight = getDouble(row, "WEIGHT", columnNames);
+			Boolean readOnly = getBoolean(row, "READONLY", columnNames);
+			Boolean inferred = getBoolean(row, "INFERRED", columnNames);
+			Boolean privacyFlag = getBoolean(row, "PRIVACYFLAG", columnNames);
+			Boolean confirmationFlag = getBoolean(row, "CONFIRMATIONFLAG", columnNames);
+			String icon = getString(row, "ICON", columnNames);
+
+			String valueString = getString(row, "VALUESTRING", columnNames);
+			Integer valueInteger = getInteger(row, "VALUEINTEGER", columnNames);
+			Boolean valueBoolean = getBoolean(row, "VALUEBOOLEAN", columnNames);
+			Long valueLong = getLong(row, "VALUELONG", columnNames);
+			LocalDate valueDate = getDate(row, "VALUEDATE", columnNames);
+			LocalDateTime valueDateTime = getDateTime(row, "VALUEDATETIME", columnNames);
+			LocalTime valueTime = getTime(row, "VALUETIME", columnNames);
+
+			Attribute attribute = getAttribute(attributeCode);
+			if (attribute == null) {
+				continue;
+			}
+
+			EntityAttribute entityAttribute = new EntityAttribute(entity, attribute, weight);
+
+			entityAttribute.setWeight(weight);
+			entityAttribute.setReadonly(readOnly);
+			entityAttribute.setInferred(inferred);
+			entityAttribute.setPrivacyFlag(privacyFlag);
+			entityAttribute.setConfirmationFlag(confirmationFlag);
+			entityAttribute.setIcon(icon);
+
+			entityAttribute.setValueString(valueString);
+			entityAttribute.setValueInteger(valueInteger);
+			entityAttribute.setValueBoolean(valueBoolean);
+			entityAttribute.setValueLong(valueLong);
+			entityAttribute.setValueDate(valueDate);
+			entityAttribute.setValueDateTime(valueDateTime);
+			entityAttribute.setValueTime(valueTime);
+
+			try {
+				entity.addAttribute(entityAttribute);
+			} catch (BadDataException e) {
+				log.error(e.getStackTrace());
+			}
+
+		}
+		return entity;
+
+	}
+
+
+	public int indexOf(JsonArray arr, String item) {
+		for (int i = 0; i < arr.size(); i++) {
+			if (arr.getString(i).equals(item)) {
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	public String getString(JsonArray arr, String key, JsonArray columnNames) {
+		int index = indexOf(columnNames, key);
+		if (index > -1) {
+			if (!arr.isNull(index)) {
+				return arr.getString(index);
+			}
+		}
+		return null;
+	}
+
+	public Integer getInteger(JsonArray arr, String key, JsonArray columnNames) {
+		int index = indexOf(columnNames, key);
+		if (index > -1) {
+			if (!arr.isNull(index)) {
+				return arr.getInt(index);
+			}
+		}
+		return null;
+	}
+
+	public Boolean getBoolean(JsonArray arr, String key, JsonArray columnNames) {
+		int index = indexOf(columnNames, key);
+		if (index > -1) {
+			if (!arr.isNull(index)) {
+				return arr.getInt(index) == 1;
+			}
+		}
+		return null;
+	}
+
+	public Long getLong(JsonArray arr, String key, JsonArray columnNames) {
+		int index = indexOf(columnNames, key);
+		if (index > -1) {
+			if (!arr.isNull(index)) {
+				return arr.getJsonNumber(index).longValue();
+			}
+		}
+		return null;
+	}
+
+	public Double getDouble(JsonArray arr, String key, JsonArray columnNames) {
+		int index = indexOf(columnNames, key);
+		if (index > -1) {
+			if (!arr.isNull(index)) {
+				return arr.getJsonNumber(index).doubleValue();
+			}
+		}
+		return null;
+	}
+
+	public LocalDate getDate(JsonArray arr, String key, JsonArray columnNames) {
+		int index = indexOf(columnNames, key);
+		if (index > -1) {
+			if (!arr.isNull(index)) {
+				return LocalDate.parse(arr.getString(index));
+			}
+		}
+		return null;
+	}
+
+	public LocalDateTime getDateTime(JsonArray arr, String key, JsonArray columnNames) {
+		int index = indexOf(columnNames, key);
+		if (index > -1) {
+			if (!arr.isNull(index)) {
+				return LocalDateTime.parse(arr.getString(index));
+			}
+		}
+		return null;
+	}
+
+	public LocalTime getTime(JsonArray arr, String key, JsonArray columnNames) {
+		int index = indexOf(columnNames, key);
+		if (index > -1) {
+			if (!arr.isNull(index)) {
+				return LocalTime.parse(arr.getString(index));
+			}
+		}
 		return null;
 	}
 
