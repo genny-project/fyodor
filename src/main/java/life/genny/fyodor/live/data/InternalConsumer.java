@@ -114,6 +114,9 @@ public class InternalConsumer {
         	usingCache = false;
         }
         
+		usingCache = false;
+		noCachePresent = true;
+
 		if (usingCache) {
 
 			pageStart = searchBE.getValue("SCH_PAGE_START",0);
