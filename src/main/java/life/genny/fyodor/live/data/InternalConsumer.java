@@ -121,7 +121,7 @@ public class InternalConsumer {
 
 			if (pageStart == 0) {
 				// only do caching if the searchsession matches the original
-				String jsonData = apiService.getDataFromCache(userToken.getRealm(), "SPEEDUP:"+templateSearchCode, "Bearer " + userToken.getToken());
+				String jsonData = apiService.getDataFromCache(serviceToken.getRealm(), "SPEEDUP:"+templateSearchCode, "Bearer " + serviceToken.getToken());
 				JsonObject json = jsonb.fromJson(jsonData, JsonObject.class);
 
 				if ("ok".equalsIgnoreCase(json.getString("status"))) {
