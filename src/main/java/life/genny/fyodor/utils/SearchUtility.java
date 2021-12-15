@@ -19,6 +19,8 @@ import javax.json.JsonObject;
 import javax.json.bind.Jsonb;
 import javax.json.bind.JsonbBuilder;
 import javax.persistence.EntityManager;
+import javax.persistence.NoResultException;
+import javax.transaction.Transactional;
 
 import org.apache.commons.lang3.StringUtils;
 import org.jboss.logging.Logger;
@@ -26,6 +28,7 @@ import org.jboss.logging.Logger;
 import io.quarkus.runtime.StartupEvent;
 
 import com.querydsl.jpa.impl.JPAQuery;
+import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.querydsl.core.types.dsl.ComparableExpressionBase;
 import com.querydsl.core.types.dsl.DateTimePath;
 import com.querydsl.core.types.dsl.Expressions;
@@ -33,6 +36,7 @@ import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Predicate;
 import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.JPQLQuery;
+import com.querydsl.jpa.hibernate.HibernateQueryFactory;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
@@ -109,7 +113,8 @@ public class SearchUtility {
 				log.info("SINGLE BASE ENTITY SEARCH DETECTED");
 				// result = new JsonArray("[\""+attr.getValue()+"\"]");
 
-				BaseEntity be = fetchBaseEntityFromCache(attr.getValue(), serviceToken);
+				// BaseEntity be = fetchBaseEntityFromCache(attr.getValue(), serviceToken);
+				BaseEntity be = fetchBaseEntityFromDB(attr.getValue());
 				be.setIndex(0);
 				BaseEntity[] arr = new BaseEntity[1];
 				arr[0] = be;
@@ -133,7 +138,7 @@ public class SearchUtility {
 		}
 
 		// Find Allowed Columns
-		String[] filterArray = getSearchColumnFilterArray(searchBE).toArray(new String[0]);
+		List<String> allowed = getSearchColumnFilterArray(searchBE);
 		// Used to disable the column privacy
 		EntityAttribute columnWildcard = searchBE.findEntityAttribute("COL_*").orElse(null);
 
@@ -146,7 +151,8 @@ public class SearchUtility {
 
 					// Filter unwanted attributes
 					if (columnWildcard == null) {
-						be = privacyFilter(be, filterArray);
+						be = privacyFilter(be, allowed);
+						be = handleSpecialAttributes(be, allowed);
 					}
 
 					for (EntityAttribute calEA : cals) {
@@ -251,16 +257,18 @@ public class SearchUtility {
 		Integer pageSize = searchBE.getPageSize(defaultPageSize);
 		// Integer pageSize = searchBE.getPageSize(defaultPageSize);
 
-		JPAQuery<?> query = new JPAQuery<Void>(entityManager);
-
 		QBaseEntity baseEntity = new QBaseEntity("baseEntity");
+		JPAQuery<?> query = new JPAQuery<Void>(entityManager);
+		query.from(baseEntity);
+
+		// JPAQueryFactory queryFactory = new JPAQueryFactory(entityManager);
+		// JPAQuery<?> query = queryFactory.selectFrom(baseEntity);
+
 		// Define a join for link searches
 		String linkCode = null;
 		String linkValue = null;
 		String sourceCode = null;
 		String targetCode = null;
-
-		query.from(baseEntity);
 
 		List<EntityAttribute> sortAttributes = new ArrayList<>();
 
@@ -555,6 +563,7 @@ public class SearchUtility {
 			builder.and(baseEntity.code.like("PER_%"))
 				.or(baseEntity.code.like("CPY_%"));
 		}
+
 		// Add all builder conditions to query
 		query.where(builder);
 		// Set page start and page size, then fetch codes
@@ -568,31 +577,40 @@ public class SearchUtility {
 			long count = query.select(baseEntity.code).distinct().fetchCount();
 			result = new QSearchBeResult(count);
 		} else {
-			// Fetch codes and count
-			codes = query.select(baseEntity.code).distinct().fetch();
-			long count = query.fetchCount();
-			result = new QSearchBeResult(codes, count);
-
+			// Fetch data and count
 			if (fetchEntities != null && fetchEntities) {
 
-				String[] filterArray = getSearchColumnFilterArray(searchBE).toArray(new String[0]);
-				BaseEntity[] beArray = new BaseEntity[codes.size()];
+				List<BaseEntity> entities = query.select(QBaseEntity.baseEntity).fetch();
+				long count = query.fetchCount();
 
-				for (int i = 0; i < codes.size(); i++) {
+				List<String> allowed = getSearchColumnFilterArray(searchBE);
+				BaseEntity[] beArray = new BaseEntity[entities.size()];
 
-					String code = codes.get(i);
-					BaseEntity be = null;
-					if (cacheDB) {
-						be = fetchBaseEntityFromCache(code, serviceToken);
-					} else {
-						be = cacheUtils.getBaseEntityByCode(code);
-					}
-					be = privacyFilter(be, filterArray);
+				for (int i = 0; i < entities.size(); i++) {
+
+					// String code = codes.get(i);
+					// BaseEntity be = null;
+					BaseEntity be = entities.get(i);
+					// if (cacheDB) {
+					// 	be = fetchBaseEntityFromCache(code, serviceToken);
+					// } else {
+					// 	be = cacheUtils.getBaseEntityByCode(code);
+					// }
+					be = privacyFilter(be, allowed);
+					be = handleSpecialAttributes(be, allowed);
 					be.setIndex(i);
 					beArray[i] = be;
 				}
+				result = new QSearchBeResult(beArray, count);
 
-				result.setEntities(beArray);
+				// result.setEntities(beArray);
+
+			} else {
+
+				codes = query.select(baseEntity.code).distinct().fetch();
+				long count = query.fetchCount();
+				result = new QSearchBeResult(codes, count);
+
 			}
 		}
 		Instant end = Instant.now();
@@ -933,28 +951,22 @@ public class SearchUtility {
 	}
 
 	public BaseEntity fetchBaseEntityFromCache(final String code, final GennyToken token) {
-		String data = null;
-		String value = null;
 
-		data = apiService.getDataFromCache(token.getRealm(), code, "Bearer " + token.getToken());
+		String data = apiService.getDataFromCache(token.getRealm(), code, "Bearer " + token.getToken());
 		JsonObject json = jsonb.fromJson(data, JsonObject.class);
 		if ("ok".equalsIgnoreCase(json.getString("status"))) {
-			value = json.getString("value");
-			// log.info(value);
+			String value = json.getString("value");
 			return jsonb.fromJson(value, BaseEntity.class);
 		}
 		return null;
 	}
 
 	public Object fetchFromCache(final String code, Class clazz, final GennyToken token) {
-		String data = null;
-		String value = null;
 
-		data = apiService.getDataFromCache(token.getRealm(), code, "Bearer " + token.getToken());
+		String data = apiService.getDataFromCache(token.getRealm(), code, "Bearer " + token.getToken());
 		JsonObject json = jsonb.fromJson(data, JsonObject.class);
 		if ("ok".equalsIgnoreCase(json.getString("status"))) {
-			value = json.getString("value");
-			// log.info(value);
+			String value = json.getString("value");
 			return jsonb.fromJson(value, clazz);
 		}
 		return null;
@@ -984,45 +996,49 @@ public class SearchUtility {
 		return attributeFilter;
 	}
 
-    public static BaseEntity privacyFilter(BaseEntity be, final String[] filterAttributes) {
-        Set<EntityAttribute> allowedAttributes = new HashSet<EntityAttribute>();
+    public static BaseEntity privacyFilter(BaseEntity be, List<String> allowed) {
+		
+		be.setBaseEntityAttributes(
+				be.getBaseEntityAttributes()
+				.stream()
+				.filter(x -> allowed.contains(x.getAttributeCode()))
+				.collect(Collectors.toSet())
+			);
 
-		for (EntityAttribute entityAttribute : be.getBaseEntityAttributes()) {
-			String attributeCode = entityAttribute.getAttributeCode();
-			if (Arrays.stream(filterAttributes).anyMatch(x -> x.equals(attributeCode))) {
-				allowedAttributes.add(entityAttribute);
+		return be;
+	}
+
+	public static BaseEntity handleSpecialAttributes(BaseEntity be, List<String> allowed) {
+
+		try {
+			// Handle Created and Updated attributes
+			if (allowed.contains("PRI_CREATED")) {
+				Attribute createdAttr = new Attribute("PRI_CREATED", "Created", new DataType(LocalDateTime.class));
+				EntityAttribute created = new EntityAttribute(be, createdAttr, 1.0);
+				created.setValueDateTime(be.getCreated());
+				be.addAttribute(created);
 			}
+			if (allowed.contains("PRI_CREATED_DATE")) {
+				Attribute createdAttr = new Attribute("PRI_CREATED_DATE", "Created", new DataType(LocalDate.class));
+				EntityAttribute created = new EntityAttribute(be, createdAttr, 1.0);
+				created.setValueDate(be.getCreated().toLocalDate());
+				be.addAttribute(created);
+			}
+			if (allowed.contains("PRI_UPDATED")) {
+				Attribute updatedAttr = new Attribute("PRI_UPDATED", "Updated", new DataType(LocalDateTime.class));
+				EntityAttribute updated = new EntityAttribute(be, updatedAttr, 1.0);
+				updated.setValueDateTime(be.getUpdated());
+				be.addAttribute(updated);
+			}
+			if (allowed.contains("PRI_UPDATED_DATE")) {
+				Attribute updatedAttr = new Attribute("PRI_UPDATED_DATE", "Updated", new DataType(LocalDate.class));
+				EntityAttribute updated = new EntityAttribute(be, updatedAttr, 1.0);
+				updated.setValueDate(be.getUpdated().toLocalDate());
+				be.addAttribute(updated);
+			}
+		} catch (BadDataException e) {
+			log.error("could not add special attributes to entity");
 		}
-        // Handle Created and Updated attributes
-        if (Arrays.asList(filterAttributes).contains("PRI_CREATED")) {
-            // log.info("filterAttributes contains PRI_CREATED");
-            Attribute createdAttr = new Attribute("PRI_CREATED", "Created", new DataType(LocalDateTime.class));
-            EntityAttribute created = new EntityAttribute(be, createdAttr, 1.0);
-            created.setValueDateTime(be.getCreated());
-            allowedAttributes.add(created);// allow attributes that starts with "LNK_"
-        }
-        if (Arrays.asList(filterAttributes).contains("PRI_CREATED_DATE")) {
-            // log.info("filterAttributes contains PRI_CREATED_DATE");
-            Attribute createdAttr = new Attribute("PRI_CREATED_DATE", "Created", new DataType(LocalDate.class));
-            EntityAttribute created = new EntityAttribute(be, createdAttr, 1.0);
-            created.setValueDate(be.getCreated().toLocalDate());
-            allowedAttributes.add(created);// allow attributes that starts with "LNK_"
-        }
-        if (Arrays.asList(filterAttributes).contains("PRI_UPDATED")) {
-            // log.info("filterAttributes contains PRI_UPDATED");
-            Attribute updatedAttr = new Attribute("PRI_UPDATED", "Updated", new DataType(LocalDateTime.class));
-            EntityAttribute updated = new EntityAttribute(be, updatedAttr, 1.0);
-            updated.setValueDateTime(be.getUpdated());
-            allowedAttributes.add(updated);// allow attributes that starts with "LNK_"
-        }
-        if (Arrays.asList(filterAttributes).contains("PRI_UPDATED_DATE")) {
-            // log.info("filterAttributes contains PRI_UPDATED_DATE");
-            Attribute updatedAttr = new Attribute("PRI_UPDATED_DATE", "Updated", new DataType(LocalDate.class));
-            EntityAttribute updated = new EntityAttribute(be, updatedAttr, 1.0);
-            updated.setValueDate(be.getUpdated().toLocalDate());
-            allowedAttributes.add(updated);// allow attributes that starts with "LNK_"
-        }
-        be.setBaseEntityAttributes(allowedAttributes);
 
         return be;
     }
@@ -1060,10 +1076,11 @@ public class SearchUtility {
 				String[] codeArr = calVal.split(",");
 				for (String code : codeArr) {
 					if (StringUtils.isBlank(code)) {
-						log.error("code from Calfields is empty calVal["+calVal+"] skipping calFields=["+calFields+"] - be:"+baseBE.getCode());
+						log.error("code from Calfields is empty calVal["+calVal+"] skipping calFields=["+calFields.toString()+"] - be:"+baseBE.getCode());
 						continue;
 					}
-					BaseEntity associatedBe = fetchBaseEntityFromCache(code, serviceToken);
+					// BaseEntity associatedBe = fetchBaseEntityFromCache(code, serviceToken);
+					BaseEntity associatedBe = fetchBaseEntityFromDB(code);
 					if (associatedBe == null) {
 						log.debug("associatedBe DOES NOT exist ->" + code);
 						return null;
@@ -1096,6 +1113,22 @@ public class SearchUtility {
 		}
 
 		return ans;
+	}
+
+	@Transactional
+	public BaseEntity fetchBaseEntityFromDB(String code) {
+
+        try {
+
+			return entityManager.createQuery("SELECT be FROM BaseEntity be where be.realm=:realmStr and be.code = :code", BaseEntity.class)
+					.setParameter("realmStr", serviceToken.getRealm())
+					.setParameter("code", code)
+					.getSingleResult();
+
+        } catch (NoResultException e) {
+            log.error("No results found in DB for " + code);
+		}
+		return null;
 	}
 
 }

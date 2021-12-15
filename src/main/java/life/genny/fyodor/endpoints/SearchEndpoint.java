@@ -24,6 +24,7 @@ import io.vertx.core.http.HttpServerRequest;
 
 import life.genny.fyodor.utils.SearchUtility;
 import life.genny.fyodor.utils.CacheUtils;
+import life.genny.qwandaq.entity.BaseEntity;
 import life.genny.qwandaq.entity.SearchEntity;
 import life.genny.qwandaq.message.QSearchBeResult;
 import life.genny.qwandaq.models.GennyToken;
@@ -71,6 +72,24 @@ public class SearchEndpoint {
 	@Path("/api/version")
 	public Response version() {
 		return Response.ok().entity("version: \""+version+"\"").build();
+	}
+
+	/**
+	* A GET request for a specific baseentity
+	* 
+	* @param code		The BaseEntity Code
+	* @return			The BaseEntity
+	 */
+	@GET
+	@Path("/api/entity/{code}")
+	public Response entity(String code) {
+
+		BaseEntity entity = search.fetchBaseEntityFromDB(code);
+
+		if (entity != null) {
+			return Response.ok().entity(entity).build();
+		}
+		return Response.status(Response.Status.NOT_FOUND).build();
 	}
 
 	/**

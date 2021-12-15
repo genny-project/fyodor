@@ -168,7 +168,7 @@ public class InternalConsumer {
 		} 
 
 		Instant end = Instant.now();
-		log.info("Finished " + (usingCache ? "WITH" : "WITHOUT") + " caching - Duration: " + Duration.between(start, end).toMillis() + " millSeconds.");
+		log.info("Finished " + (noCachePresent ? "WITHOUT" : "WITH") + " caching - Duration: " + Duration.between(start, end).toMillis() + " millSeconds.");
 
 		// TODO: Sort out this Nested Search
 

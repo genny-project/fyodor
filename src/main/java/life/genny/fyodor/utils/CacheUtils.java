@@ -10,6 +10,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
@@ -80,17 +82,11 @@ public class CacheUtils {
 
     static public Map<String,Map<String, Attribute>> realmAttributeMap = new ConcurrentHashMap<>();
 
+
     void onStart(@Observes StartupEvent ev) {
         log.info("The Cache is starting...");
 		serviceToken = new KeycloakUtils().getToken(baseKeycloakUrl, keycloakRealm, clientId, secret, serviceUsername, servicePassword, null);
 		loadAllAttributesFromCache();
-
-		// BaseEntity be = getBaseEntityByCode("PER_FA30B9EB-BF0C-45DF-AB0E-DE61CCD9A735");
-		// if (be != null) {
-		// 	log.info("BE CODE = " + be.getCode());
-		// 	log.info("NUMM ATTRS = " + be.getBaseEntityAttributes().size());
-		// }
-
     }
 
     public Attribute getAttribute(final String attributeCode) {
@@ -264,23 +260,20 @@ public class CacheUtils {
 
 
 	@Transactional
-	public List<Attribute> fetchAttributesFromDB() throws NoResultException {
+	public List<Attribute> fetchAttributesFromDB() {
 
         try {
 
-			final List<Attribute> results = entityManager.createQuery("SELECT a FROM Attribute a where a.realm=:realmStr and a.name not like 'App\\_%'")
+			return entityManager.createQuery("SELECT a FROM Attribute a where a.realm=:realmStr and a.name not like 'App\\_%'", Attribute.class)
 					.setParameter("realmStr", serviceToken.getRealm())
 					.getResultList();
 
-			return results;
-
         } catch (NoResultException e) {
             log.error("No results found from DB search");
-            e.printStackTrace();
+            log.error(e.getStackTrace());
 		}
 		return null;
 	}
-
 
 	/**
 	* Get a BaseEntity from the KSQLDB cache
@@ -327,16 +320,16 @@ public class CacheUtils {
 		JsonArray columnNames = header.getJsonArray("columnNames");
 
 		String entityCode = getString(rows.get(0), "BASEENTITYCODE", columnNames);
-		String name = getString(rows.get(0), "NAME", columnNames);
+		// String name = getString(rows.get(0), "NAME", columnNames);
 
-		BaseEntity entity = new BaseEntity(entityCode, name);
+		BaseEntity entity = new BaseEntity(entityCode, entityCode);
 
-		Integer statusOrdinal = getInteger(rows.get(0), "STATUS", columnNames);
-		if (statusOrdinal == null) {
-			statusOrdinal = 0;
-		}
-		EEntityStatus status = EEntityStatus.values()[statusOrdinal];
-		entity.setStatus(status);
+		// Integer statusOrdinal = getInteger(rows.get(0), "STATUS", columnNames);
+		// if (statusOrdinal == null) {
+		// 	statusOrdinal = 0;
+		// }
+		// EEntityStatus status = EEntityStatus.values()[statusOrdinal];
+		// entity.setStatus(status);
 
 		for (JsonArray row : rows) {
 

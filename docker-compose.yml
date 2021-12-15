@@ -47,8 +47,17 @@ services:
       - VIRTUAL_PROTO=http
       - CERT_NAME=genny.life
       - DEBUG_SUSPEND=n
-  #    - DDT_URL=http://bridge:8089 
+  #    - DDT_URL=http://bridge:8089
       - FULL_MYSQL_URL=jdbc:mysql://mysql/gennydb
+      - GENNY_KAFKA_URL=http://localhost:9092
+      - GENNY_REALM=internmatch
+      - GENNY_CLIENT_ID=${GENNY_CLIENT_ID}
+      - GENNY_CLIENT_SECRET=${GENNY_CLIENT_SECRET}
+      - GENNY_SERVICE_USERNAME=${GENNY_SERVICE_USERNAME}
+      - GENNY_SERVICE_PASSWORD=${GENNY_SERVICE_PASSWORD}
+      - GENNY_KEYCLOAK_URL=https://keycloak.gada.io
+      - GENNY_API_URL=http://localhost:8080
+      - GENNY_MYSQL_FULL_URL=alyson.genny.life:3310/gennydb?zeroDateTimeBehavior=convertToNull&serverTimezone=UTC
     ports:
       - "8480:8080"
       - "8487:8787"
