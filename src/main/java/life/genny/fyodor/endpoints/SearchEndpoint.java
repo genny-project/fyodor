@@ -23,7 +23,6 @@ import io.quarkus.runtime.ShutdownEvent;
 import io.vertx.core.http.HttpServerRequest;
 
 import life.genny.fyodor.utils.SearchUtility;
-import life.genny.fyodor.utils.CacheUtils;
 import life.genny.qwandaq.entity.BaseEntity;
 import life.genny.qwandaq.entity.SearchEntity;
 import life.genny.qwandaq.message.QSearchBeResult;
@@ -56,9 +55,6 @@ public class SearchEndpoint {
 
 	@Inject
 	EntityManager entityManager;
-
-	@Inject
-	CacheUtils cacheUtils;
 
 	@Inject
 	SearchUtility search;

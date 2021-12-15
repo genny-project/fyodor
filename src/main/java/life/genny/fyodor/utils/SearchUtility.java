@@ -9,8 +9,10 @@ import java.util.Set;
 import java.util.HashSet;
 import java.time.*;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.Map;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
@@ -96,8 +98,7 @@ public class SearchUtility {
 
 	Jsonb jsonb = JsonbBuilder.create();
 
-	@Inject
-	CacheUtils cacheUtils;
+    static public Map<String,Map<String, Attribute>> realmAttributeMap = new ConcurrentHashMap<>();
 
     void onStart(@Observes StartupEvent ev) {
 		serviceToken = new KeycloakUtils().getToken(baseKeycloakUrl, keycloakRealm, clientId, secret, serviceUsername, servicePassword, null);
@@ -187,7 +188,7 @@ public class SearchUtility {
 		}
 
 		try {
-			Attribute attrTotalResults = cacheUtils.getAttribute("PRI_TOTAL_RESULTS");
+			Attribute attrTotalResults = getAttribute("PRI_TOTAL_RESULTS");
 			searchBE.addAnswer(new Answer(searchBE, searchBE, attrTotalResults, results.getTotal() + ""));
 		} catch (BadDataException e) {
 			log.error(e.getStackTrace());
@@ -503,7 +504,7 @@ public class SearchUtility {
 				orderColumn = baseEntity.name;
 			} else {
 				// Use Attribute Code to find the datatype, and thus the DB field to sort on
-				Attribute attr = cacheUtils.getAttribute(attributeCode.substring("SRT_".length()));
+				Attribute attr = getAttribute(attributeCode.substring("SRT_".length()));
 				String dtt = attr.getDataType().getClassName();
 				orderColumn = getPathFromDatatype(dtt, eaOrderJoin);
 			}
@@ -1061,7 +1062,7 @@ public class SearchUtility {
 		String finalAttributeCode = calEACode.substring("COL_".length());
 		// Fetch The Attribute of the last code
 		String primaryAttrCode = calFields[calFields.length-1];
-		Attribute primaryAttribute = cacheUtils.getAttribute(primaryAttrCode);
+		Attribute primaryAttribute = getAttribute(primaryAttrCode);
 
 		Answer ans = new Answer(baseBE.getCode(), baseBE.getCode(), finalAttributeCode, "");
 		Attribute att = new Attribute(finalAttributeCode, primaryAttribute.getName(), primaryAttribute.getDataType());
@@ -1114,6 +1115,69 @@ public class SearchUtility {
 
 		return ans;
 	}
+
+    public Attribute getAttribute(final String attributeCode) {
+
+    	String realm = serviceToken.getRealm();
+
+    	if (realmAttributeMap.get(serviceToken.getRealm())==null) {
+    		loadAllAttributesFromCache();
+    	}
+
+        Attribute attribute = realmAttributeMap.get(realm).get(attributeCode);
+
+		if (attribute == null) {
+			log.error("Bad Attribute in Map for realm " +realm + " and code " + attributeCode);
+		}
+
+        return attribute;
+    }
+
+    public void loadAllAttributesFromCache() {
+
+		String realm = serviceToken.getRealm();
+
+		log.info("About to load all attributes for realm " + realm);
+
+		List<Attribute> attributeList = fetchAttributesFromDB();
+
+		if (attributeList == null) {
+			log.error("Null attributeList, not putting in map!!!");
+			return;
+		}
+
+		// Check for existing map
+		if (!realmAttributeMap.containsKey(realm)) {
+			realmAttributeMap.put(realm, new ConcurrentHashMap<String,Attribute>());
+		}
+		Map<String,Attribute> attributeMap = realmAttributeMap.get(realm);
+
+		// Insert attributes into map
+		for (Attribute attribute : attributeList) {
+			attributeMap.put(attribute.getCode(), attribute);
+		}
+
+		String location = cacheDB ? "DB" : "KSQLDB";
+		log.info("All attributes have been loaded in from " + location + ": " + attributeMap.size() + " attributes loaded!");
+    }
+
+
+	@Transactional
+	public List<Attribute> fetchAttributesFromDB() {
+
+        try {
+
+			return entityManager.createQuery("SELECT a FROM Attribute a where a.realm=:realmStr and a.name not like 'App\\_%'", Attribute.class)
+					.setParameter("realmStr", serviceToken.getRealm())
+					.getResultList();
+
+        } catch (NoResultException e) {
+            log.error("No results found from DB search");
+            log.error(e.getStackTrace());
+		}
+		return null;
+	}
+
 
 	@Transactional
 	public BaseEntity fetchBaseEntityFromDB(String code) {

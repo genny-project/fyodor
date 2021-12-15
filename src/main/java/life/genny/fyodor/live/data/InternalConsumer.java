@@ -23,7 +23,6 @@ import io.quarkus.runtime.StartupEvent;
 import io.smallrye.reactive.messaging.annotations.Blocking;
 import life.genny.fyodor.service.ApiService;
 import life.genny.fyodor.utils.SearchUtility;
-import life.genny.fyodor.utils.CacheUtils;
 
 import life.genny.qwandaq.attribute.Attribute;
 import life.genny.qwandaq.attribute.EntityAttribute;
@@ -70,9 +69,6 @@ public class InternalConsumer {
 	SearchUtility search;
 
 	GennyToken serviceToken;
-
-	@Inject
-	CacheUtils cacheUtils;
 
     void onStart(@Observes StartupEvent ev) {
 		serviceToken = new KeycloakUtils().getToken(baseKeycloakUrl, keycloakRealm, clientId, secret, serviceUsername, servicePassword, null);
