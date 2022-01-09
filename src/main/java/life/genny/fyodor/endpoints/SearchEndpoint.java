@@ -1,5 +1,7 @@
 package life.genny.fyodor.endpoints;
 
+import java.util.List;
+
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
@@ -17,17 +19,14 @@ import org.jboss.logging.Logger;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
-import io.quarkus.runtime.StartupEvent;
-import io.quarkus.runtime.ShutdownEvent;
-
 import io.vertx.core.http.HttpServerRequest;
 
 import life.genny.fyodor.utils.SearchUtility;
+import life.genny.qwandaq.attribute.Attribute;
 import life.genny.qwandaq.entity.BaseEntity;
 import life.genny.qwandaq.entity.SearchEntity;
 import life.genny.qwandaq.message.QSearchBeResult;
 import life.genny.qwandaq.models.GennyToken;
-import life.genny.qwandaq.utils.KeycloakUtils;
 import life.genny.fyodor.service.ApiService;
 
 /**
@@ -71,10 +70,27 @@ public class SearchEndpoint {
 	}
 
 	/**
+	* A GET request for all attributes
+	* 
+	* @return	Attribute List
+	 */
+	@GET
+	@Path("/api/attributes")
+	public Response attributes() {
+
+		List<Attribute> attributes = search.fetchAttributesFromDB();
+
+		if (attributes != null) {
+			return Response.ok().entity(attributes).build();
+		}
+		return Response.status(Response.Status.NOT_FOUND).build();
+	}
+
+	/**
 	* A GET request for a specific baseentity
 	* 
-	* @param code		The BaseEntity Code
-	* @return			The BaseEntity
+	* @param code	The BaseEntity Code
+	* @return		The BaseEntity
 	 */
 	@GET
 	@Path("/api/entity/{code}")
@@ -108,11 +124,11 @@ public class SearchEndpoint {
 				userToken = new GennyToken(token);
 			} else {
 				log.error("Bad token in Search GET provided");
-				return Response.ok().build();
+				return Response.status(Response.Status.FORBIDDEN).build();
 			}
 		} catch (Exception e) {
 			log.error("Bad or no header token in Search POST provided");
-			return Response.ok().build();
+			return Response.status(Response.Status.BAD_REQUEST).build();
 		}
 
 		// Process search
