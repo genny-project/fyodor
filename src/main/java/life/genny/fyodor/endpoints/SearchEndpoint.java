@@ -5,9 +5,12 @@ import java.util.List;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
+import javax.json.bind.Jsonb;
+import javax.json.bind.JsonbBuilder;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
@@ -28,6 +31,7 @@ import life.genny.qwandaq.entity.SearchEntity;
 import life.genny.qwandaq.message.QSearchBeResult;
 import life.genny.qwandaq.models.GennyToken;
 import life.genny.fyodor.service.ApiService;
+import life.genny.fyodor.streams.InteractiveQueries;
 
 /**
  * SearchEndpoint - Endpoints providing classic Genny Search functionality
@@ -58,6 +62,11 @@ public class SearchEndpoint {
 	@Inject
 	SearchUtility search;
 
+    @Inject
+    InteractiveQueries interactiveQueries;
+
+	Jsonb jsonb = JsonbBuilder.create();
+
 	/**
 	* A GET request for the running fyodor version
 	*
@@ -78,13 +87,40 @@ public class SearchEndpoint {
 	@Path("/api/attributes")
 	public Response attributes() {
 
+		log.info("Attributes GET received..");
+
 		List<Attribute> attributes = search.fetchAttributesFromDB();
 
 		if (attributes != null) {
-			return Response.ok().entity(attributes).build();
+
+			String json = jsonb.toJson(attributes);
+			return Response.ok().entity(json).build();
 		}
 		return Response.status(Response.Status.NOT_FOUND).build();
 	}
+
+	/**
+	* A GET request for a specific Attribute
+	* 
+	* @param code	The Attribute Code
+	* @return		The Attribute
+	 */
+	@GET
+	@Path("/api/attribute/{code}")
+	public Response attribute(@PathParam("code") String code) {
+
+		log.info("Attribute ("+code+") GET received..");
+
+		Attribute attribute = interactiveQueries.getAttribute(code);
+
+		if (attribute != null) {
+
+			String json = jsonb.toJson(attribute);
+			return Response.ok().entity(json).build();
+		}
+		return Response.status(Response.Status.NOT_FOUND).build();
+	}
+
 
 	/**
 	* A GET request for a specific baseentity
@@ -94,19 +130,24 @@ public class SearchEndpoint {
 	 */
 	@GET
 	@Path("/api/entity/{code}")
-	public Response entity(String code) {
+	public Response entity(@PathParam("code") String code) {
+
+		log.info("Entity ("+code+") GET received..");
 
 		BaseEntity entity = search.fetchBaseEntityFromDB(code);
 
 		if (entity != null) {
-			return Response.ok().entity(entity).build();
+
+			String json = jsonb.toJson(entity);
+			return Response.ok().entity(json).build();
 		}
 		return Response.status(Response.Status.NOT_FOUND).build();
 	}
 
 	/**
 	 * 
-	 * A POST request for search results based on a SearchEntity
+	 * A POST request for search results based on a 
+	 * {@link SearchEntity}. Will only fetch codes.
 	 *
 	 * @return Success
 	 */
@@ -114,14 +155,14 @@ public class SearchEndpoint {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/api/search")
 	public Response search(SearchEntity searchEntity) {
-		log.info("Search POST received..");
-		GennyToken userToken = null;
 
+		log.info("Search POST received..");
 		String token = null;
+
 		try {
 			token = request.getHeader("authorization").split("Bearer ")[1];
 			if (token != null) {
-				userToken = new GennyToken(token);
+				GennyToken userToken = new GennyToken(token);
 			} else {
 				log.error("Bad token in Search GET provided");
 				return Response.status(Response.Status.FORBIDDEN).build();
@@ -133,7 +174,45 @@ public class SearchEndpoint {
 
 		// Process search
 		QSearchBeResult results = search.findBySearch25(searchEntity, false, false);
+		log.info("Found " + results.getTotal() + " results!");
 
-		return Response.ok().entity(results).build();
+		String json = jsonb.toJson(results);
+		return Response.ok().entity(json).build();
+	}
+
+	/**
+	 * 
+	 * A POST request for search results based on a 
+	 * {@link SearchEntity}. Will fetch complete entities.
+	 *
+	 * @return Success
+	 */
+	@POST
+	@Produces(MediaType.APPLICATION_JSON)
+	@Path("/api/search/fetch")
+	public Response fetch(SearchEntity searchEntity) {
+
+		log.info("Fetch POST received..");
+		String token = null;
+
+		try {
+			token = request.getHeader("authorization").split("Bearer ")[1];
+			if (token != null) {
+				GennyToken userToken = new GennyToken(token);
+			} else {
+				log.error("Bad token in Search GET provided");
+				return Response.status(Response.Status.FORBIDDEN).build();
+			}
+		} catch (Exception e) {
+			log.error("Bad or no header token in Search POST provided");
+			return Response.status(Response.Status.BAD_REQUEST).build();
+		}
+
+		// Process search
+		QSearchBeResult results = search.findBySearch25(searchEntity, false, true);
+		log.info("Found " + results.getTotal() + " results!");
+
+		String json = jsonb.toJson(results);
+		return Response.ok().entity(json).build();
 	}
 }

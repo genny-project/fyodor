@@ -262,9 +262,6 @@ public class SearchUtility {
 		JPAQuery<?> query = new JPAQuery<Void>(entityManager);
 		query.from(baseEntity);
 
-		// JPAQueryFactory queryFactory = new JPAQueryFactory(entityManager);
-		// JPAQuery<?> query = queryFactory.selectFrom(baseEntity);
-
 		// Define a join for link searches
 		String linkCode = null;
 		String linkValue = null;
@@ -587,6 +584,8 @@ public class SearchUtility {
 				List<String> allowed = getSearchColumnFilterArray(searchBE);
 				BaseEntity[] beArray = new BaseEntity[entities.size()];
 
+				Boolean columnWildcard = searchBE.findEntityAttribute("COL_*").isPresent();
+
 				for (int i = 0; i < entities.size(); i++) {
 
 					// String code = codes.get(i);
@@ -597,14 +596,16 @@ public class SearchUtility {
 					// } else {
 					// 	be = cacheUtils.getBaseEntityByCode(code);
 					// }
-					be = privacyFilter(be, allowed);
+				
+					if (!columnWildcard) {
+						be = privacyFilter(be, allowed);
+					}
 					be = handleSpecialAttributes(be, allowed);
+
 					be.setIndex(i);
 					beArray[i] = be;
 				}
 				result = new QSearchBeResult(beArray, count);
-
-				// result.setEntities(beArray);
 
 			} else {
 
@@ -662,9 +663,14 @@ public class SearchUtility {
 		return path.eq(dateTime);
 	}
 	
+	/**
+	* return a predicate based on the attribute value and datatype
+	*
+	* @param ea
+	* @param entityAttribute
+	* @return
+	 */
 	public static Predicate getAttributeSearchColumn(EntityAttribute ea, QEntityAttribute entityAttribute) {
-
-		// TODO: Make this function more neat, and less repetitive - Jasper (19/08/2021)
 
 		String attributeFilterValue = ea.getValue().toString();
 		String condition = SearchEntity.convertFromSaveable(ea.getAttributeName());
@@ -775,6 +781,13 @@ public class SearchUtility {
 		return entityAttribute.valueString.eq(valueString);
 	}
 
+	/**
+	* Find the value column based off of the attribute datatype
+	*
+	* @param dtt
+	* @param entityAttribute
+	* @return
+	 */
 	public static ComparableExpressionBase getPathFromDatatype(String dtt, QEntityAttribute entityAttribute) {
 
 		if (dtt.equals("Text")) {
@@ -803,9 +816,11 @@ public class SearchUtility {
 
 
 	/**
-	 * For association filter of format like LNK_PERSON.LNK_COMPANY.PRI_NAME,
-	 * this function wil strip the first code in that chain of attributes
-	 * whilst retaining any AND/OR prefixs.
+	* For association filter of format like LNK_PERSON.LNK_COMPANY.PRI_NAME,
+	* this function wil strip the first code in that chain of attributes
+	* whilst retaining any AND/OR prefixs.
+	* 
+	* @param eaList
 	 */
 	public static void detatchBaseAttributeCode(List<EntityAttribute> eaList) {
 
@@ -900,6 +915,15 @@ public class SearchUtility {
 		}
 	}
 
+	/**
+	* Generate a sub query to perform a wildcard search on valueString
+	*
+	* @param value
+	* @param recursion
+	* @param whitelist
+	* @param blacklist
+	* @return
+	 */
 	public static JPQLQuery generateWildcardSubQuery(String value, Integer recursion, String[] whitelist, String[] blacklist) {
 
 		// Random uuid to for uniqueness in the query string
@@ -999,6 +1023,7 @@ public class SearchUtility {
 
     public static BaseEntity privacyFilter(BaseEntity be, List<String> allowed) {
 		
+		// Filter out unwanted attributes
 		be.setBaseEntityAttributes(
 				be.getBaseEntityAttributes()
 				.stream()
