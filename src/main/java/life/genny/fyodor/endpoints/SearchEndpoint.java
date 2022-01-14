@@ -94,6 +94,7 @@ public class SearchEndpoint {
 		if (attributes != null) {
 
 			String json = jsonb.toJson(attributes);
+			log.info("sending attrs = " + json);
 			return Response.ok().entity(json).build();
 		}
 		return Response.status(Response.Status.NOT_FOUND).build();

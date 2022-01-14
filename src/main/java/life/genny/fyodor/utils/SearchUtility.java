@@ -248,6 +248,8 @@ public class SearchUtility {
 
 		Instant start = Instant.now();
 
+		log.info("About to search ("+searchBE.getCode()+")");
+
 		String realm = this.serviceToken.getRealm();
 		Integer defaultPageSize = 20;
 		// Init necessary vars
