@@ -92,14 +92,15 @@ public class InternalConsumer {
 		beUtils = new BaseEntityUtils(serviceToken);
 
 		// TODO: Fix this
-		List<Attribute> attributes = entityManager.createQuery("SELECT a FROM Attribute a where a.realm=:realmStr and a.name not like 'App\\_%'", Attribute.class)
-			.setParameter("realmStr", serviceToken.getRealm())
-			.getResultList();
+		// log.info("getting attrs");
+		// List<Attribute> attributes = entityManager.createQuery("SELECT a FROM Attribute a where a.realm=:realmStr and a.name not like 'App\\_%'", Attribute.class)
+		// 	.setParameter("realmStr", serviceToken.getRealm())
+		// 	.getResultList();
 
 		// Establish connection to cache and init utilities
 		CacheUtils.init(cache);
-		QwandaUtils.init(serviceToken, attributes);
-		DefUtils.init(beUtils);
+		// QwandaUtils.init(serviceToken, attributes);
+		// DefUtils.init(beUtils);
 
 		log.info("[*] Finished Startup!");
     }
