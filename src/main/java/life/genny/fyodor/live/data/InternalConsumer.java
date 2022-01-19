@@ -12,6 +12,7 @@ import javax.persistence.EntityManager;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.List;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
@@ -64,6 +65,9 @@ public class InternalConsumer {
 	String secret;
 
 	@Inject
+	EntityManager entityManager;
+
+	@Inject
 	InternalProducer producer;
 
 	@Inject
@@ -87,9 +91,14 @@ public class InternalConsumer {
 		// Init Utility Objects
 		beUtils = new BaseEntityUtils(serviceToken);
 
+		// TODO: Fix this
+		List<Attribute> attributes = entityManager.createQuery("SELECT a FROM Attribute a where a.realm=:realmStr and a.name not like 'App\\_%'", Attribute.class)
+			.setParameter("realmStr", serviceToken.getRealm())
+			.getResultList();
+
 		// Establish connection to cache and init utilities
 		CacheUtils.init(cache);
-		QwandaUtils.init(serviceToken);
+		QwandaUtils.init(serviceToken, attributes);
 		DefUtils.init(beUtils);
 
 		log.info("[*] Finished Startup!");

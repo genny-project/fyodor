@@ -1205,7 +1205,6 @@ public class SearchUtility {
 		return null;
 	}
 
-
 	@Transactional
 	public BaseEntity fetchBaseEntityFromDB(String code) {
 
