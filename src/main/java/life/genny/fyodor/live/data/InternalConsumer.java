@@ -26,6 +26,7 @@ import life.genny.fyodor.utils.SearchUtility;
 
 import life.genny.qwandaq.attribute.Attribute;
 import life.genny.qwandaq.attribute.EntityAttribute;
+import life.genny.qwandaq.data.GennyCache;
 import life.genny.qwandaq.entity.SearchEntity;
 import life.genny.qwandaq.exception.BadDataException;
 import life.genny.qwandaq.message.QDataBaseEntityMessage;
@@ -33,7 +34,11 @@ import life.genny.qwandaq.message.QSearchBeResult;
 import life.genny.qwandaq.message.QSearchMessage;
 import life.genny.qwandaq.message.QBulkMessage;
 import life.genny.qwandaq.models.GennyToken;
+import life.genny.qwandaq.utils.BaseEntityUtils;
+import life.genny.qwandaq.utils.CacheUtils;
+import life.genny.qwandaq.utils.DefUtils;
 import life.genny.qwandaq.utils.KeycloakUtils;
+import life.genny.qwandaq.utils.QwandaUtils;
 
 @ApplicationScoped
 public class InternalConsumer {
@@ -68,10 +73,26 @@ public class InternalConsumer {
 	@Inject
 	SearchUtility search;
 
+	@Inject 
+	GennyCache cache;
+
 	GennyToken serviceToken;
 
+	BaseEntityUtils beUtils;
+
     void onStart(@Observes StartupEvent ev) {
+
 		serviceToken = new KeycloakUtils().getToken(baseKeycloakUrl, keycloakRealm, clientId, secret, serviceUsername, servicePassword, null);
+
+		// Init Utility Objects
+		beUtils = new BaseEntityUtils(serviceToken);
+
+		// Establish connection to cache and init utilities
+		CacheUtils.init(cache);
+		QwandaUtils.init(serviceToken);
+		DefUtils.init(beUtils);
+
+		log.info("[*] Finished Startup!");
     }
 
 	@Incoming("search_events")
@@ -97,74 +118,10 @@ public class InternalConsumer {
 
 		log.info("Handling search " + searchBE.getCode());
 
-        // Check if a filter is being used
-        final String templateSearchCode  = searchBE.getCode().replaceFirst("_"+userToken.getSessionCode().toUpperCase(), "");
-        
-        QBulkMessage bulkMsg = null;
-        Boolean noCachePresent = true;
-        Boolean usingCache = searchBE.is("SCH_CACHABLE");
-        Integer pageStart = -1;
-        
-        String wildcard = searchBE.getValueAsString("SCH_WILDCARD");
-        if (wildcard != null && !wildcard.isBlank()) {
-        	usingCache = false;
-        }
-        
-		usingCache = false;
-		noCachePresent = true;
-
-		if (usingCache) {
-
-			pageStart = searchBE.getValue("SCH_PAGE_START",0);
-			log.info("Fetching Table Search from Cache with pageStart = "+pageStart);
-
-			if (pageStart == 0) {
-				// only do caching if the searchsession matches the original
-				String jsonData = apiService.getDataFromCache(serviceToken.getRealm(), "SPEEDUP:"+templateSearchCode, "Bearer " + serviceToken.getToken());
-				JsonObject json = jsonb.fromJson(jsonData, JsonObject.class);
-
-				if ("ok".equalsIgnoreCase(json.getString("status"))) {
-					String value = json.getString("value");
-					bulkMsg = jsonb.fromJson(value, QBulkMessage.class);
-				}
-
-				if (bulkMsg == null) {
-					noCachePresent = true;
-
-				} else {
-
-					if (bulkMsg.getMessages()[0].getParentCode()!=null) {
-						bulkMsg.getMessages()[0].setParentCode(templateSearchCode+"_"+userToken.getSessionCode().toUpperCase());
-					} else {
-						Arrays.stream(bulkMsg.getMessages()[0].getItems()).forEach(i -> i.setCode(templateSearchCode+"_"+userToken.getSessionCode().toUpperCase()));        				  
-					}
-
-					if (bulkMsg.getMessages().length>0) {
-						if (bulkMsg.getMessages()[1].getParentCode()!=null) {
-							bulkMsg.getMessages()[1].setParentCode(templateSearchCode+"_"+userToken.getSessionCode().toUpperCase());
-						} else {
-							Arrays.stream(bulkMsg.getMessages()[1].getItems()).forEach(i -> i.setCode(templateSearchCode+"_"+userToken.getSessionCode().toUpperCase()));        				  
-						}
-					}
-					// update with latest user token
-					bulkMsg.setToken(userToken.getToken());
-					noCachePresent = false;
-				}
-			}
-		}
-
-		if (noCachePresent) {
-			// Process search
-			bulkMsg = search.processSearchEntity(searchBE, userToken);
-
-			if ((pageStart == 0) && usingCache) {
-				String json = jsonb.toJson(bulkMsg);
-				apiService.writeDataIntoCache("SPEEDUP:"+templateSearchCode, json, "Bearer " + userToken.getToken());
-			}
-		} 
+        QBulkMessage bulkMsg = search.processSearchEntity(searchBE, userToken);
 
 		Instant end = Instant.now();
-		log.info("Finished " + (noCachePresent ? "WITHOUT" : "WITH") + " caching - Duration: " + Duration.between(start, end).toMillis() + " millSeconds.");
+		log.info("Finished! - Duration: " + Duration.between(start, end).toMillis() + " millSeconds.");
 
 		// TODO: Sort out this Nested Search
 

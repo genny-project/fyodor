@@ -3,10 +3,10 @@ package life.genny.fyodor.endpoints;
 import java.util.List;
 
 import javax.enterprise.context.ApplicationScoped;
-import javax.enterprise.event.Observes;
 import javax.inject.Inject;
 import javax.json.bind.Jsonb;
 import javax.json.bind.JsonbBuilder;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -16,6 +16,7 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.persistence.EntityManager;
+import javax.persistence.Query;
 
 import org.jboss.logging.Logger;
 
@@ -34,14 +35,14 @@ import life.genny.fyodor.service.ApiService;
 import life.genny.fyodor.streams.InteractiveQueries;
 
 /**
- * SearchEndpoint - Endpoints providing classic Genny Search functionality
+ * SearchResource - Endpoints providing classic Genny Search functionality
  */
 
 @Path("/")
 @ApplicationScoped
-public class SearchEndpoint {
+public class SearchResource {
 
-	private static final Logger log = Logger.getLogger(SearchEndpoint.class);
+	private static final Logger log = Logger.getLogger(SearchResource.class);
 
 	@ConfigProperty(name = "genny.keycloak.url", defaultValue = "https://keycloak.gada.io")
 	String baseKeycloakUrl;
@@ -100,6 +101,28 @@ public class SearchEndpoint {
 	}
 
 	/**
+	* A POST request to save a new attribute.
+	* 
+	* @return	Attribute List
+	 */
+	@POST
+	@Produces(MediaType.APPLICATION_JSON)
+	@Path("/api/attributes")
+	public Response addAttribute(Attribute attribute) {
+
+		log.info("Create Attribute (" + attribute.getCode() + ") POST received..");
+
+		try {
+			entityManager.persist(attribute);
+		} catch (Exception e) {
+			log.error(e);
+			return Response.status(Response.Status.NOT_FOUND).build();
+		}
+
+		return Response.ok().status(Response.Status.CREATED).build();
+	}
+
+	/**
 	* A GET request for a specific Attribute
 	* 
 	* @param code	The Attribute Code
@@ -119,6 +142,29 @@ public class SearchEndpoint {
 			return Response.ok().entity(json).build();
 		}
 		return Response.status(Response.Status.NOT_FOUND).build();
+	}
+
+	/**
+	* A DELETE request for a specific Attribute
+	* 
+	* @param code	The Attribute Code
+	 */
+	@DELETE
+	@Path("/api/attribute/{code}")
+	public Response deleteAttribute(@PathParam("code") String code) {
+
+		log.info("Attribute ("+code+") DELETE received..");
+
+		try {
+			Query q = entityManager.createQuery("DELETE Attribute WHERE code = :code");
+			q.setParameter("code", code);
+			q.executeUpdate();
+		} catch (Exception e) {
+			log.error(e);
+			return Response.status(Response.Status.NOT_FOUND).build();
+		}
+
+		return Response.ok().status(Response.Status.OK).build();
 	}
 
 
