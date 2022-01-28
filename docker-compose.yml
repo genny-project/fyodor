@@ -59,7 +59,7 @@ services:
       - GENNY_API_URL=http://localhost:8080
       - GENNY_MYSQL_FULL_URL=alyson.genny.life:3310/gennydb?zeroDateTimeBehavior=convertToNull&serverTimezone=UTC
     ports:
-      - "8480:8080"
+      - "4242:8080"
       - "8487:8787"
     links:
       - mysql:mysql
