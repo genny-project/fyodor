@@ -6,38 +6,31 @@ import javax.inject.Inject;
 import javax.json.bind.Jsonb;
 import javax.json.bind.JsonbBuilder;
 import javax.json.bind.JsonbConfig;
-import javax.json.JsonObject;
 import javax.persistence.EntityManager;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.List;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jboss.logging.Logger;
 
-import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import io.smallrye.reactive.messaging.annotations.Blocking;
+import life.genny.fyodor.intf.KafkaBean;
 import life.genny.fyodor.service.ApiService;
 import life.genny.fyodor.utils.SearchUtility;
 
-import life.genny.qwandaq.attribute.Attribute;
-import life.genny.qwandaq.attribute.EntityAttribute;
 import life.genny.qwandaq.data.GennyCache;
 import life.genny.qwandaq.entity.SearchEntity;
-import life.genny.qwandaq.exception.BadDataException;
-import life.genny.qwandaq.message.QDataBaseEntityMessage;
-import life.genny.qwandaq.message.QSearchBeResult;
 import life.genny.qwandaq.message.QSearchMessage;
 import life.genny.qwandaq.message.QBulkMessage;
 import life.genny.qwandaq.models.GennyToken;
 import life.genny.qwandaq.utils.BaseEntityUtils;
 import life.genny.qwandaq.utils.CacheUtils;
-import life.genny.qwandaq.utils.DefUtils;
+import life.genny.qwandaq.utils.DatabaseUtils;
+import life.genny.qwandaq.utils.KafkaUtils;
 import life.genny.qwandaq.utils.KeycloakUtils;
 import life.genny.qwandaq.utils.QwandaUtils;
 
@@ -80,6 +73,9 @@ public class InternalConsumer {
 	@Inject 
 	GennyCache cache;
 
+	@Inject
+	KafkaBean kafkaBean;
+
 	GennyToken serviceToken;
 
 	BaseEntityUtils beUtils;
@@ -91,16 +87,11 @@ public class InternalConsumer {
 		// Init Utility Objects
 		beUtils = new BaseEntityUtils(serviceToken);
 
-		// TODO: Fix this
-		// log.info("getting attrs");
-		// List<Attribute> attributes = entityManager.createQuery("SELECT a FROM Attribute a where a.realm=:realmStr and a.name not like 'App\\_%'", Attribute.class)
-		// 	.setParameter("realmStr", serviceToken.getRealm())
-		// 	.getResultList();
-
-		// Establish connection to cache and init utilities
+		// Establish connection to DB and cache, and init utilities
+		DatabaseUtils.init(entityManager);
 		CacheUtils.init(cache);
-		// QwandaUtils.init(serviceToken, attributes);
-		// DefUtils.init(beUtils);
+		KafkaUtils.init(kafkaBean);
+		QwandaUtils.init(serviceToken);
 
 		log.info("[*] Finished Startup!");
     }
@@ -127,6 +118,7 @@ public class InternalConsumer {
 		}
 
 		log.info("Handling search " + searchBE.getCode());
+
 
         QBulkMessage bulkMsg = search.processSearchEntity(searchBE, userToken);
 

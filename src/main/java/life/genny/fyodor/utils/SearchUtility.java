@@ -5,8 +5,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.Comparator;
 import java.util.Collections;
-import java.util.Set;
-import java.util.HashSet;
 import java.time.*;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -21,8 +19,6 @@ import javax.json.JsonObject;
 import javax.json.bind.Jsonb;
 import javax.json.bind.JsonbBuilder;
 import javax.persistence.EntityManager;
-import javax.persistence.NoResultException;
-import javax.transaction.Transactional;
 
 import org.apache.commons.lang3.StringUtils;
 import org.jboss.logging.Logger;
@@ -30,7 +26,6 @@ import org.jboss.logging.Logger;
 import io.quarkus.runtime.StartupEvent;
 
 import com.querydsl.jpa.impl.JPAQuery;
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.querydsl.core.types.dsl.ComparableExpressionBase;
 import com.querydsl.core.types.dsl.DateTimePath;
 import com.querydsl.core.types.dsl.Expressions;
@@ -38,7 +33,6 @@ import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Predicate;
 import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.JPQLQuery;
-import com.querydsl.jpa.hibernate.HibernateQueryFactory;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
@@ -59,7 +53,10 @@ import life.genny.qwandaq.models.GennyToken;
 import life.genny.fyodor.service.ApiService;
 import life.genny.qwandaq.Answer;
 import life.genny.qwandaq.exception.BadDataException;
+import life.genny.qwandaq.utils.BaseEntityUtils;
+import life.genny.qwandaq.utils.CacheUtils;
 import life.genny.qwandaq.utils.KeycloakUtils;
+import life.genny.qwandaq.utils.QwandaUtils;
 
 @ApplicationScoped
 public class SearchUtility {
@@ -96,26 +93,39 @@ public class SearchUtility {
 
 	GennyToken serviceToken;
 
+	BaseEntityUtils beUtils;
+
 	Jsonb jsonb = JsonbBuilder.create();
 
     static public Map<String,Map<String, Attribute>> realmAttributeMap = new ConcurrentHashMap<>();
 
     void onStart(@Observes StartupEvent ev) {
 		serviceToken = new KeycloakUtils().getToken(baseKeycloakUrl, keycloakRealm, clientId, secret, serviceUsername, servicePassword, null);
+
+		// Init Utility Objects
+		beUtils = new BaseEntityUtils(serviceToken);
     }
 
 	public QBulkMessage processSearchEntity(SearchEntity searchBE, GennyToken userToken) {
 
 		QSearchBeResult results = null;
+		Boolean isCountEntity = false;
+
+		// check if it is a count SBE
+		if (searchBE.getCode().startsWith("CNS_")) {
+
+			log.info("Found Count Entity " + searchBE.getCode());
+			// Remove CNS_ prefix and set count var
+			searchBE.setCode(searchBE.getCode().substring(4));
+			isCountEntity = true;
+		}
 
 		// Check for a specific item search
 		for (EntityAttribute attr : searchBE.getBaseEntityAttributes()) {
 			if (attr.getAttributeCode().equals("PRI_CODE") && attr.getAttributeName().equals("_EQ_")) {
 				log.info("SINGLE BASE ENTITY SEARCH DETECTED");
-				// result = new JsonArray("[\""+attr.getValue()+"\"]");
 
-				// BaseEntity be = fetchBaseEntityFromCache(attr.getValue(), serviceToken);
-				BaseEntity be = fetchBaseEntityFromDB(attr.getValue());
+				BaseEntity be = beUtils.getBaseEntityByCode(attr.getValue());
 				be.setIndex(0);
 				BaseEntity[] arr = new BaseEntity[1];
 				arr[0] = be;
@@ -126,7 +136,7 @@ public class SearchUtility {
 
 		// Perform search
 		if (results == null) {
-			results = findBySearch25(searchBE, false, true);
+			results = findBySearch25(searchBE, isCountEntity, true);
 		}
 
 		List<EntityAttribute> cals = searchBE.findPrefixEntityAttributes("COL__");
@@ -176,7 +186,8 @@ public class SearchUtility {
 		for (EntityAttribute ea : searchBE.getBaseEntityAttributes()) {
 			if (ea.getAttributeCode().startsWith("CMB_")) {
 				String combinedSearchCode = ea.getAttributeCode().substring("CMB_".length());
-				SearchEntity combinedSearch = (SearchEntity) fetchFromCache(combinedSearchCode, SearchEntity.class, serviceToken);
+				SearchEntity combinedSearch = CacheUtils.getObject(this.serviceToken.getRealm(), combinedSearchCode, SearchEntity.class);
+
 				Long subTotal = performCount(combinedSearch);
 				if (subTotal != null) {
 					totalResultCount += subTotal;
@@ -188,7 +199,7 @@ public class SearchUtility {
 		}
 
 		try {
-			Attribute attrTotalResults = getAttribute("PRI_TOTAL_RESULTS");
+			Attribute attrTotalResults = QwandaUtils.getAttribute("PRI_TOTAL_RESULTS");
 			searchBE.addAnswer(new Answer(searchBE, searchBE, attrTotalResults, results.getTotal() + ""));
 		} catch (BadDataException e) {
 			log.error(e.getStackTrace());
@@ -201,14 +212,18 @@ public class SearchUtility {
 
 		QDataBaseEntityMessage searchBEMsg = new QDataBaseEntityMessage(searchBE);
 		searchBEMsg.setToken(userToken.getToken());
+		searchBEMsg.setReplace(true);
 		bulkMsg.add(searchBEMsg);
 
-		QDataBaseEntityMessage entityMsg = new QDataBaseEntityMessage(results.getEntities());
-		entityMsg.setTotal(results.getTotal());
-		entityMsg.setReplace(true);
-		entityMsg.setParentCode(searchBE.getCode());
-		entityMsg.setToken(userToken.getToken());
-		bulkMsg.add(entityMsg);
+		// don't add result entities if it is only a count
+		if (!isCountEntity) {
+			QDataBaseEntityMessage entityMsg = new QDataBaseEntityMessage(results.getEntities());
+			entityMsg.setTotal(results.getTotal());
+			entityMsg.setReplace(true);
+			entityMsg.setParentCode(searchBE.getCode());
+			entityMsg.setToken(userToken.getToken());
+			bulkMsg.add(entityMsg);
+		}
 
 		return bulkMsg;
 	}
@@ -222,7 +237,7 @@ public class SearchUtility {
 		for (EntityAttribute ea : searchBE.getBaseEntityAttributes()) {
 			if (ea.getAttributeCode().startsWith("CMB_")) {
 				String combinedSearchCode = ea.getAttributeCode().substring("CMB_".length());
-				SearchEntity combinedSearch = (SearchEntity) fetchFromCache(combinedSearchCode, SearchEntity.class, serviceToken);
+				SearchEntity combinedSearch = CacheUtils.getObject(this.serviceToken.getRealm(), combinedSearchCode, SearchEntity.class);
 				Long subTotal = performCount(combinedSearch);
 				if (subTotal != null) {
 					total += subTotal;
@@ -465,13 +480,13 @@ public class SearchUtility {
 			} else if (attributeCode.startsWith("SCH_STATUS")) {
 				Integer ordinal = ea.getValueInteger();
 				status = EEntityStatus.values()[ordinal];
+				log.info("Search Status: ["+status.toString()+":"+ordinal.toString()+"]");
 			// Add to sort list if it is a sort attribute
 			} else if (attributeCode.startsWith("SRT_")) {
 				sortAttributes.add(ea);
 			}
 		}
 		// Add BaseEntity Status expression
-		// builder.and(baseEntity.status.coalesce(EEntityStatus.ACTIVE).getValue().loe(status));
 		builder.and(baseEntity.status.loe(status));
 		// Order the sorts by weight
 		Comparator<EntityAttribute> compareByWeight = (EntityAttribute a, EntityAttribute b) -> a.getWeight().compareTo(b.getWeight());
@@ -503,7 +518,7 @@ public class SearchUtility {
 				orderColumn = baseEntity.name;
 			} else {
 				// Use Attribute Code to find the datatype, and thus the DB field to sort on
-				Attribute attr = getAttribute(attributeCode.substring("SRT_".length()));
+				Attribute attr = QwandaUtils.getAttribute(attributeCode.substring("SRT_".length()));
 				String dtt = attr.getDataType().getClassName();
 				orderColumn = getPathFromDatatype(dtt, eaOrderJoin);
 			}
@@ -977,28 +992,6 @@ public class SearchUtility {
 		return formatted;
 	}
 
-	public BaseEntity fetchBaseEntityFromCache(final String code, final GennyToken token) {
-
-		String data = apiService.getDataFromCache(token.getRealm(), code, "Bearer " + token.getToken());
-		JsonObject json = jsonb.fromJson(data, JsonObject.class);
-		if ("ok".equalsIgnoreCase(json.getString("status"))) {
-			String value = json.getString("value");
-			return jsonb.fromJson(value, BaseEntity.class);
-		}
-		return null;
-	}
-
-	public Object fetchFromCache(final String code, Class clazz, final GennyToken token) {
-
-		String data = apiService.getDataFromCache(token.getRealm(), code, "Bearer " + token.getToken());
-		JsonObject json = jsonb.fromJson(data, JsonObject.class);
-		if ("ok".equalsIgnoreCase(json.getString("status"))) {
-			String value = json.getString("value");
-			return jsonb.fromJson(value, clazz);
-		}
-		return null;
-	}
-
 	public static List<String> getSearchColumnFilterArray(SearchEntity searchBE)
 	{
 		List<String> attributeFilter = new ArrayList<String>();
@@ -1089,26 +1082,29 @@ public class SearchUtility {
 		String finalAttributeCode = calEACode.substring("COL_".length());
 		// Fetch The Attribute of the last code
 		String primaryAttrCode = calFields[calFields.length-1];
-		Attribute primaryAttribute = getAttribute(primaryAttrCode);
+		Attribute primaryAttribute = QwandaUtils.getAttribute(primaryAttrCode);
 
 		Answer ans = new Answer(baseBE.getCode(), baseBE.getCode(), finalAttributeCode, "");
 		Attribute att = new Attribute(finalAttributeCode, primaryAttribute.getName(), primaryAttribute.getDataType());
 		ans.setAttribute(att);
 
 		for (int i = 0; i < calFields.length-1; i++) {
+
 			String attributeCode = calFields[i];
 			String calBe = be.getValueAsString(attributeCode);
 
 			if (calBe != null && !StringUtils.isBlank(calBe)) {
+
 				String calVal = calBe.replace("\"", "").replace("[", "").replace("]", "").replace(" ", "");
 				String[] codeArr = calVal.split(",");
+
 				for (String code : codeArr) {
 					if (StringUtils.isBlank(code)) {
 						log.error("code from Calfields is empty calVal["+calVal+"] skipping calFields=["+calFields.toString()+"] - be:"+baseBE.getCode());
 						continue;
 					}
-					// BaseEntity associatedBe = fetchBaseEntityFromCache(code, serviceToken);
-					BaseEntity associatedBe = fetchBaseEntityFromDB(code);
+
+					BaseEntity associatedBe = beUtils.getBaseEntityByCode(code);
 					if (associatedBe == null) {
 						log.debug("associatedBe DOES NOT exist ->" + code);
 						return null;
@@ -1141,84 +1137,6 @@ public class SearchUtility {
 		}
 
 		return ans;
-	}
-
-    public Attribute getAttribute(final String attributeCode) {
-
-    	String realm = serviceToken.getRealm();
-
-    	if (realmAttributeMap.get(serviceToken.getRealm())==null) {
-    		loadAllAttributesFromCache();
-    	}
-
-        Attribute attribute = realmAttributeMap.get(realm).get(attributeCode);
-
-		if (attribute == null) {
-			log.error("Bad Attribute in Map for realm " +realm + " and code " + attributeCode);
-		}
-
-        return attribute;
-    }
-
-    public void loadAllAttributesFromCache() {
-
-		String realm = serviceToken.getRealm();
-
-		log.info("About to load all attributes for realm " + realm);
-
-		List<Attribute> attributeList = fetchAttributesFromDB();
-
-		if (attributeList == null) {
-			log.error("Null attributeList, not putting in map!!!");
-			return;
-		}
-
-		// Check for existing map
-		if (!realmAttributeMap.containsKey(realm)) {
-			realmAttributeMap.put(realm, new ConcurrentHashMap<String,Attribute>());
-		}
-		Map<String,Attribute> attributeMap = realmAttributeMap.get(realm);
-
-		// Insert attributes into map
-		for (Attribute attribute : attributeList) {
-			attributeMap.put(attribute.getCode(), attribute);
-		}
-
-		String location = cacheDB ? "DB" : "KSQLDB";
-		log.info("All attributes have been loaded in from " + location + ": " + attributeMap.size() + " attributes loaded!");
-    }
-
-
-	@Transactional
-	public List<Attribute> fetchAttributesFromDB() {
-
-        try {
-
-			return entityManager.createQuery("SELECT a FROM Attribute a where a.realm=:realmStr and a.name not like 'App\\_%'", Attribute.class)
-					.setParameter("realmStr", serviceToken.getRealm())
-					.getResultList();
-
-        } catch (NoResultException e) {
-            log.error("No results found from DB search");
-            log.error(e.getStackTrace());
-		}
-		return null;
-	}
-
-	@Transactional
-	public BaseEntity fetchBaseEntityFromDB(String code) {
-
-        try {
-
-			return entityManager.createQuery("SELECT be FROM BaseEntity be where be.realm=:realmStr and be.code = :code", BaseEntity.class)
-					.setParameter("realmStr", serviceToken.getRealm())
-					.setParameter("code", code)
-					.getSingleResult();
-
-        } catch (NoResultException e) {
-            log.error("No results found in DB for " + code);
-		}
-		return null;
 	}
 
 }
