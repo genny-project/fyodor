@@ -54,6 +54,7 @@ import life.genny.fyodor.service.ApiService;
 import life.genny.qwandaq.Answer;
 import life.genny.qwandaq.exception.BadDataException;
 import life.genny.qwandaq.utils.BaseEntityUtils;
+import life.genny.qwandaq.utils.CacheUtils;
 import life.genny.qwandaq.utils.KeycloakUtils;
 import life.genny.qwandaq.utils.QwandaUtils;
 
@@ -185,7 +186,8 @@ public class SearchUtility {
 		for (EntityAttribute ea : searchBE.getBaseEntityAttributes()) {
 			if (ea.getAttributeCode().startsWith("CMB_")) {
 				String combinedSearchCode = ea.getAttributeCode().substring("CMB_".length());
-				SearchEntity combinedSearch = (SearchEntity) fetchFromCache(combinedSearchCode, SearchEntity.class, serviceToken);
+				SearchEntity combinedSearch = CacheUtils.getObject(this.serviceToken.getRealm(), combinedSearchCode, SearchEntity.class);
+
 				Long subTotal = performCount(combinedSearch);
 				if (subTotal != null) {
 					totalResultCount += subTotal;
@@ -235,7 +237,7 @@ public class SearchUtility {
 		for (EntityAttribute ea : searchBE.getBaseEntityAttributes()) {
 			if (ea.getAttributeCode().startsWith("CMB_")) {
 				String combinedSearchCode = ea.getAttributeCode().substring("CMB_".length());
-				SearchEntity combinedSearch = (SearchEntity) fetchFromCache(combinedSearchCode, SearchEntity.class, serviceToken);
+				SearchEntity combinedSearch = CacheUtils.getObject(this.serviceToken.getRealm(), combinedSearchCode, SearchEntity.class);
 				Long subTotal = performCount(combinedSearch);
 				if (subTotal != null) {
 					total += subTotal;
@@ -988,28 +990,6 @@ public class SearchUtility {
 			formatted = formatted.substring(prefix.length() + 1);
 		}
 		return formatted;
-	}
-
-	public BaseEntity fetchBaseEntityFromCache(final String code, final GennyToken token) {
-
-		String data = apiService.getDataFromCache(token.getRealm(), code, "Bearer " + token.getToken());
-		JsonObject json = jsonb.fromJson(data, JsonObject.class);
-		if ("ok".equalsIgnoreCase(json.getString("status"))) {
-			String value = json.getString("value");
-			return jsonb.fromJson(value, BaseEntity.class);
-		}
-		return null;
-	}
-
-	public Object fetchFromCache(final String code, Class clazz, final GennyToken token) {
-
-		String data = apiService.getDataFromCache(token.getRealm(), code, "Bearer " + token.getToken());
-		JsonObject json = jsonb.fromJson(data, JsonObject.class);
-		if ("ok".equalsIgnoreCase(json.getString("status"))) {
-			String value = json.getString("value");
-			return jsonb.fromJson(value, clazz);
-		}
-		return null;
 	}
 
 	public static List<String> getSearchColumnFilterArray(SearchEntity searchBE)
