@@ -478,13 +478,13 @@ public class SearchUtility {
 			} else if (attributeCode.startsWith("SCH_STATUS")) {
 				Integer ordinal = ea.getValueInteger();
 				status = EEntityStatus.values()[ordinal];
+				log.info("Search Status: ["+status.toString()+":"+ordinal.toString()+"]");
 			// Add to sort list if it is a sort attribute
 			} else if (attributeCode.startsWith("SRT_")) {
 				sortAttributes.add(ea);
 			}
 		}
 		// Add BaseEntity Status expression
-		// builder.and(baseEntity.status.coalesce(EEntityStatus.ACTIVE).getValue().loe(status));
 		builder.and(baseEntity.status.loe(status));
 		// Order the sorts by weight
 		Comparator<EntityAttribute> compareByWeight = (EntityAttribute a, EntityAttribute b) -> a.getWeight().compareTo(b.getWeight());
