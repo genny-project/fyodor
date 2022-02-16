@@ -436,15 +436,18 @@ public class SearchUtility {
 						QEntityAttribute eaWildcardJoin = new QEntityAttribute("eaWildcardJoin");
 						query.leftJoin(eaWildcardJoin);
 
-						if (wilcardWhiteList.length > 0) {
-							log.info("Whitelist = " + Arrays.toString(wilcardWhiteList));
-							query.on(eaWildcardJoin.pk.baseEntity.id.eq(baseEntity.id).and(eaWildcardJoin.attributeCode.in(wilcardWhiteList)));
-						} else if (wilcardBlackList.length > 0) {
-							log.info("Blacklist = " + Arrays.toString(wilcardBlackList));
-							query.on(eaWildcardJoin.pk.baseEntity.id.eq(baseEntity.id).and(eaWildcardJoin.attributeCode.notIn(wilcardBlackList)));
-						} else {
-							query.on(eaWildcardJoin.pk.baseEntity.id.eq(baseEntity.id));
-						}
+						// if (wilcardWhiteList.length > 0) {
+						// 	log.info("Whitelist = " + Arrays.toString(wilcardWhiteList));
+						// 	query.on(eaWildcardJoin.pk.baseEntity.id.eq(baseEntity.id).and(eaWildcardJoin.attributeCode.in(wilcardWhiteList)));
+						// } else if (wilcardBlackList.length > 0) {
+						// 	log.info("Blacklist = " + Arrays.toString(wilcardBlackList));
+						// 	query.on(eaWildcardJoin.pk.baseEntity.id.eq(baseEntity.id).and(eaWildcardJoin.attributeCode.notIn(wilcardBlackList)));
+						// } else {
+						// 	query.on(eaWildcardJoin.pk.baseEntity.id.eq(baseEntity.id));
+						// }
+						log.info("Whitelist = " + Arrays.toString(wilcardWhiteList));
+						log.info("Blacklist = " + Arrays.toString(wilcardBlackList));
+						query.on(eaWildcardJoin.pk.baseEntity.id.eq(baseEntity.id));
 
 						// Find the depth level for associated wildcards
 						EntityAttribute depthLevelAttribute = searchBE.findEntityAttribute("SCH_WILDCARD_DEPTH").orElse(null);
@@ -453,19 +456,51 @@ public class SearchUtility {
 							depth = depthLevelAttribute.getValueInteger();
 						}
 
+						// only wildcard on associations if depth is non zero
 						if (depth != null && depth > 0) {
-							builder.and(baseEntity.name.like(wildcardValue)
-									.or(eaWildcardJoin.valueString.like(wildcardValue)
-										.or(Expressions.stringTemplate("replace({0},'[\"','')", 
-												Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
-												).in(generateWildcardSubQuery(wildcardValue, depth, wilcardWhiteList, wilcardBlackList))
+
+							/* 
+							 * NOTE: We must build the wildcard where condition differently for 
+							 * whitelists, blacklists and ordinary cases.
+							 */
+
+							// build wildcard for whitelist
+							if (wilcardWhiteList.length > 0) {
+								builder.and(baseEntity.name.like(wildcardValue)
+										.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.in(wilcardWhiteList))
+											.or(Expressions.stringTemplate("replace({0},'[\"','')", 
+													Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
+													).in(generateWildcardSubQuery(wildcardValue, depth, wilcardWhiteList, wilcardBlackList))
+											   )
 										   )
-									   )
-									);
+										);
+
+							// build wildcard for blacklist
+							} else if (wilcardBlackList.length > 0) {
+								builder.and(baseEntity.name.like(wildcardValue)
+										.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.notIn(wilcardBlackList))
+											.or(Expressions.stringTemplate("replace({0},'[\"','')", 
+													Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
+													).in(generateWildcardSubQuery(wildcardValue, depth, wilcardWhiteList, wilcardBlackList))
+											   )
+										   )
+										);
+								
+							// build wildcard for ordinary cases
+							} else {
+								builder.and(baseEntity.name.like(wildcardValue)
+										.or(eaWildcardJoin.valueString.like(wildcardValue)
+											.or(Expressions.stringTemplate("replace({0},'[\"','')", 
+													Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
+													).in(generateWildcardSubQuery(wildcardValue, depth, wilcardWhiteList, wilcardBlackList))
+											   )
+										   )
+										);
+							}
+
 						} else {
 							builder.and(baseEntity.name.like(wildcardValue)
 									.or(eaWildcardJoin.valueString.like(wildcardValue)));
-
 						}
 					}
 				}
