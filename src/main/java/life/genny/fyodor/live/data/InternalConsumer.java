@@ -142,17 +142,14 @@ public class InternalConsumer {
 		// 	}
 		// }
 
-		// Publish results to destination channel
-		if (msg.getDestination().equals("search_data")) {
-
-			String json = jsonb.toJson(bulkMsg);
-			producer.getToSearchData().send(json);
-
-		} else if (msg.getDestination().equals("webcmds")) {
-
-			String json = jsonb.toJson(bulkMsg);
-			producer.getToWebCmds().send(json);
-
+		// check for null destination
+		if (msg.getDestination() == null) {
+			log.error("Destination is null! Not Sending results.");
+			return;
 		}
+
+		// publish results to destination channel
+		String json = jsonb.toJson(bulkMsg);
+		KafkaUtils.writeMsg(msg.getDestination(), json);
 	}
 }
