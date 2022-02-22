@@ -100,7 +100,7 @@ public class SearchUtility {
     static public Map<String,Map<String, Attribute>> realmAttributeMap = new ConcurrentHashMap<>();
 
     void onStart(@Observes StartupEvent ev) {
-		serviceToken = KeycloakUtils.getToken(baseKeycloakUrl, keycloakRealm, clientId, secret, serviceUsername, servicePassword, null);
+		serviceToken = KeycloakUtils.getToken(baseKeycloakUrl, keycloakRealm, clientId, secret, serviceUsername, servicePassword);
 
 		// Init Utility Objects
 		beUtils = new BaseEntityUtils(serviceToken);
