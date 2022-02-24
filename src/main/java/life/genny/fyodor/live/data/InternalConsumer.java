@@ -3,6 +3,7 @@ package life.genny.fyodor.live.data;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
+import javax.json.JsonObject;
 import javax.json.bind.Jsonb;
 import javax.json.bind.JsonbBuilder;
 import javax.json.bind.JsonbConfig;
@@ -33,11 +34,14 @@ import life.genny.qwandaq.utils.DatabaseUtils;
 import life.genny.qwandaq.utils.KafkaUtils;
 import life.genny.qwandaq.utils.KeycloakUtils;
 import life.genny.qwandaq.utils.QwandaUtils;
+import life.genny.qwandaq.data.BridgeSwitch;
 
 @ApplicationScoped
 public class InternalConsumer {
 
-	private static final Logger log = Logger.getLogger(InternalConsumer.class);
+	static final Logger log = Logger.getLogger(InternalConsumer.class);
+
+    static Jsonb jsonb = JsonbBuilder.create();
 
 	@ConfigProperty(name = "genny.keycloak.url", defaultValue = "https://keycloak.gada.io")
 	String baseKeycloakUrl;
@@ -105,10 +109,14 @@ public class InternalConsumer {
 		Instant start = Instant.now();
 
 		// Deserialize with null values to avoid deserialisation errors
-		JsonbConfig config = new JsonbConfig();
-		Jsonb jsonb = JsonbBuilder.create(config);
 		QSearchMessage msg = jsonb.fromJson(data, QSearchMessage.class);
 		GennyToken userToken = new GennyToken(msg.getToken());
+
+		// update bridge switch
+		String jti = userToken.getUniqueId();
+		String bridgeId = msg.getBridgeId();
+		BridgeSwitch.bridges.put(jti, bridgeId);
+
 		SearchEntity searchBE = msg.getSearchEntity();
 		log.info("Token: " + msg.getToken());
 
