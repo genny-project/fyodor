@@ -108,6 +108,14 @@ public class SearchUtility {
 
 	public QBulkMessage processSearchEntity(SearchEntity searchBE, GennyToken userToken) {
 
+		// check if default constructor was used for this search
+		if (searchBE.getName().equals("Or Search")) {
+
+			// update name using cache if it was
+			SearchEntity cachedSearchEntity = CacheUtils.getObject(userToken.getRealm(), searchBE.getCode(), SearchEntity.class);
+			searchBE.setName(cachedSearchEntity.getName());
+		}
+
 		QSearchBeResult results = null;
 		Boolean isCountEntity = false;
 
