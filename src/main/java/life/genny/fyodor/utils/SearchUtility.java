@@ -108,25 +108,6 @@ public class SearchUtility {
 
 	public QBulkMessage processSearchEntity(SearchEntity searchBE, GennyToken userToken) {
 
-		EntityAttribute title = searchBE.findEntityAttribute("SCH_TITLE").orElse(null);
-		// check if default constructor was used for this search
-		if (title != null && title.getValueString().equals("Or Search")) {
-
-			// update name using cache if it was
-			SearchEntity cachedSearchEntity = CacheUtils.getObject(userToken.getRealm(), searchBE.getCode(), SearchEntity.class);
-
-			if (cachedSearchEntity != null) {
-
-				EntityAttribute cachedTitle = cachedSearchEntity.findEntityAttribute("SCH_TITLE").orElse(null);
-
-				if (cachedTitle != null) {
-					searchBE.setTitle(cachedTitle.getValueString());
-
-					log.info("[X] Found Or Search... setting title to " + cachedTitle.getValueString());
-				}
-			}
-		}
-
 		QSearchBeResult results = null;
 		Boolean isCountEntity = false;
 
