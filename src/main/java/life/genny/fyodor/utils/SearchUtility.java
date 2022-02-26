@@ -15,7 +15,6 @@ import java.util.Map;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
-import javax.json.JsonObject;
 import javax.json.bind.Jsonb;
 import javax.json.bind.JsonbBuilder;
 import javax.persistence.EntityManager;
@@ -35,7 +34,6 @@ import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.JPQLQuery;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import life.genny.qwandaq.attribute.Attribute;
 import life.genny.qwandaq.attribute.EntityAttribute;
@@ -50,7 +48,6 @@ import life.genny.qwandaq.message.QSearchBeResult;
 import life.genny.qwandaq.message.QBulkMessage;
 import life.genny.qwandaq.message.QDataBaseEntityMessage;
 import life.genny.qwandaq.models.GennyToken;
-import life.genny.fyodor.service.ApiService;
 import life.genny.qwandaq.Answer;
 import life.genny.qwandaq.exception.BadDataException;
 import life.genny.qwandaq.utils.BaseEntityUtils;
@@ -86,10 +83,6 @@ public class SearchUtility {
 
 	@Inject
 	EntityManager entityManager;
-
-	@Inject
-	@RestClient
-	ApiService apiService;
 
 	GennyToken serviceToken;
 
