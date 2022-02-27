@@ -40,6 +40,7 @@ public class InternalConsumer {
     void onStart(@Observes StartupEvent ev) {
 
 		service.initToken();
+		service.initDatabase();
 		service.initCache();
 		service.initAttributes();
 		service.initKafka();

@@ -161,8 +161,6 @@
     <factorypathentry kind="VARJAR" id="M2_REPO/org/infinispan/infinispan-query-dsl/13.0.5.Final/infinispan-query-dsl-13.0.5.Final.jar" enabled="true" runInBatchMode="false"/>
     <factorypathentry kind="VARJAR" id="M2_REPO/org/infinispan/protostream/protostream-processor/4.4.1.Final/protostream-processor-4.4.1.Final.jar" enabled="true" runInBatchMode="false"/>
     <factorypathentry kind="VARJAR" id="M2_REPO/org/infinispan/protostream/protostream-types/4.4.1.Final/protostream-types-4.4.1.Final.jar" enabled="true" runInBatchMode="false"/>
-    <factorypathentry kind="VARJAR" id="M2_REPO/io/quarkus/quarkus-container-image-docker/2.7.1.Final/quarkus-container-image-docker-2.7.1.Final.jar" enabled="true" runInBatchMode="false"/>
-    <factorypathentry kind="VARJAR" id="M2_REPO/io/quarkus/quarkus-container-image/2.7.1.Final/quarkus-container-image-2.7.1.Final.jar" enabled="true" runInBatchMode="false"/>
     <factorypathentry kind="VARJAR" id="M2_REPO/io/quarkus/quarkus-oidc/2.7.1.Final/quarkus-oidc-2.7.1.Final.jar" enabled="true" runInBatchMode="false"/>
     <factorypathentry kind="VARJAR" id="M2_REPO/io/quarkus/quarkus-vertx/2.7.1.Final/quarkus-vertx-2.7.1.Final.jar" enabled="true" runInBatchMode="false"/>
     <factorypathentry kind="VARJAR" id="M2_REPO/io/netty/netty-codec-haproxy/4.1.73.Final/netty-codec-haproxy-4.1.73.Final.jar" enabled="true" runInBatchMode="false"/>
@@ -269,6 +267,8 @@
     <factorypathentry kind="VARJAR" id="M2_REPO/org/slf4j/slf4j-api/1.7.33/slf4j-api-1.7.33.jar" enabled="true" runInBatchMode="false"/>
     <factorypathentry kind="VARJAR" id="M2_REPO/org/jboss/logmanager/log4j2-jboss-logmanager/1.1.1.Final/log4j2-jboss-logmanager-1.1.1.Final.jar" enabled="true" runInBatchMode="false"/>
     <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/logging/log4j/log4j-api/2.17.1/log4j-api-2.17.1.jar" enabled="true" runInBatchMode="false"/>
+    <factorypathentry kind="VARJAR" id="M2_REPO/io/quarkus/quarkus-container-image-docker/2.7.1.Final/quarkus-container-image-docker-2.7.1.Final.jar" enabled="true" runInBatchMode="false"/>
+    <factorypathentry kind="VARJAR" id="M2_REPO/io/quarkus/quarkus-container-image/2.7.1.Final/quarkus-container-image-2.7.1.Final.jar" enabled="true" runInBatchMode="false"/>
     <factorypathentry kind="VARJAR" id="M2_REPO/io/smallrye/common/smallrye-common-io/1.8.0/smallrye-common-io-1.8.0.jar" enabled="true" runInBatchMode="false"/>
     <factorypathentry kind="VARJAR" id="M2_REPO/org/jboss/jandex/2.4.2.Final/jandex-2.4.2.Final.jar" enabled="true" runInBatchMode="false"/>
     <factorypathentry kind="VARJAR" id="M2_REPO/org/jboss/logging/commons-logging-jboss-logging/1.0.0.Final/commons-logging-jboss-logging-1.0.0.Final.jar" enabled="true" runInBatchMode="false"/>
