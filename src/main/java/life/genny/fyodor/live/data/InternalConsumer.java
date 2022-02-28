@@ -113,9 +113,9 @@ public class InternalConsumer {
 		GennyToken userToken = new GennyToken(msg.getToken());
 
 		// update bridge switch
-		// String jti = userToken.getUniqueId();
-		// String bridgeId = msg.getBridgeId();
-		// BridgeSwitch.bridges.put(jti, bridgeId);
+		String jti = userToken.getUniqueId();
+		String bridgeId = msg.getBridgeId();
+		BridgeSwitch.bridges.put(jti, bridgeId);
 
 		SearchEntity searchBE = msg.getSearchEntity();
 		log.info("Token: " + msg.getToken());
