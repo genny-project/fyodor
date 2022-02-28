@@ -42,11 +42,11 @@ public class KafkaBean implements KafkaInterface {
 
 			String bridgeId = BridgeSwitch.bridges.get(userToken.getUniqueId());
 
-			OutgoingKafkaRecordMetadata<String> metadata = OutgoingKafkaRecordMetadata.<String>builder()
-				.withTopic(bridgeId + "-" + channel)
-				.build();
+			// OutgoingKafkaRecordMetadata<String> metadata = OutgoingKafkaRecordMetadata.<String>builder()
+			// 	.withTopic(bridgeId + "-" + channel)
+			// 	.build();
 
-			producer.getToWebCmds().send(Message.of(event.toString()).addMetadata(metadata));
+			// producer.getToWebCmds().send(Message.of(event.toString()).addMetadata(metadata));
 
 		} else if ("search_data".equals(channel)) {
 			producer.getToSearchData().send(payload);
