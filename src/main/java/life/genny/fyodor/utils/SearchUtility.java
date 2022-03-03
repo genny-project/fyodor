@@ -467,35 +467,31 @@ public class SearchUtility {
 							// build wildcard for whitelist
 							if (wilcardWhiteList.length > 0) {
 								builder.and(baseEntity.name.like(wildcardValue)
-										// .or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.in(wilcardWhiteList))
-										.or(eaWildcardJoin.attributeCode.in(wilcardWhiteList).and(eaWildcardJoin.valueString.like(wildcardValue))
+										.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.in(wilcardWhiteList)))
 											.or(Expressions.stringTemplate("replace({0},'[\"','')", 
 													Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
 													).in(generateWildcardSubQuery(wildcardValue, depth, wilcardWhiteList, wilcardBlackList))
 											   )
-										   )
 										);
 
 							// build wildcard for blacklist
 							} else if (wilcardBlackList.length > 0) {
 								builder.and(baseEntity.name.like(wildcardValue)
-										.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.notIn(wilcardBlackList))
+										.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.notIn(wilcardBlackList)))
 											.or(Expressions.stringTemplate("replace({0},'[\"','')", 
 													Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
 													).in(generateWildcardSubQuery(wildcardValue, depth, wilcardWhiteList, wilcardBlackList))
 											   )
-										   )
 										);
 								
 							// build wildcard for ordinary cases
 							} else {
 								builder.and(baseEntity.name.like(wildcardValue)
-										.or(eaWildcardJoin.valueString.like(wildcardValue)
+										.or(eaWildcardJoin.valueString.like(wildcardValue))
 											.or(Expressions.stringTemplate("replace({0},'[\"','')", 
 													Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
 													).in(generateWildcardSubQuery(wildcardValue, depth, wilcardWhiteList, wilcardBlackList))
 											   )
-										   )
 										);
 							}
 
