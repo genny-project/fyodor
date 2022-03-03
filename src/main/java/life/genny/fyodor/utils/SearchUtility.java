@@ -496,8 +496,21 @@ public class SearchUtility {
 							}
 
 						} else {
-							builder.and(baseEntity.name.like(wildcardValue)
-									.or(eaWildcardJoin.valueString.like(wildcardValue)));
+
+							if (wilcardWhiteList.length > 0) {
+								builder.and(baseEntity.name.like(wildcardValue)
+										.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.in(wilcardWhiteList))));
+
+								// build wildcard for blacklist
+							} else if (wilcardBlackList.length > 0) {
+								builder.and(baseEntity.name.like(wildcardValue)
+										.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.notIn(wilcardBlackList))));
+
+								// build wildcard for ordinary cases
+							} else {
+								builder.and(baseEntity.name.like(wildcardValue)
+										.or(eaWildcardJoin.valueString.like(wildcardValue)));
+							}
 						}
 					}
 				}
