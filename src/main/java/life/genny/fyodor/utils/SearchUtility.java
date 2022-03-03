@@ -436,15 +436,6 @@ public class SearchUtility {
 						QEntityAttribute eaWildcardJoin = new QEntityAttribute("eaWildcardJoin");
 						query.leftJoin(eaWildcardJoin);
 
-						// if (wilcardWhiteList.length > 0) {
-						// 	log.info("Whitelist = " + Arrays.toString(wilcardWhiteList));
-						// 	query.on(eaWildcardJoin.pk.baseEntity.id.eq(baseEntity.id).and(eaWildcardJoin.attributeCode.in(wilcardWhiteList)));
-						// } else if (wilcardBlackList.length > 0) {
-						// 	log.info("Blacklist = " + Arrays.toString(wilcardBlackList));
-						// 	query.on(eaWildcardJoin.pk.baseEntity.id.eq(baseEntity.id).and(eaWildcardJoin.attributeCode.notIn(wilcardBlackList)));
-						// } else {
-						// 	query.on(eaWildcardJoin.pk.baseEntity.id.eq(baseEntity.id));
-						// }
 						log.info("Whitelist = " + Arrays.toString(wilcardWhiteList));
 						log.info("Blacklist = " + Arrays.toString(wilcardBlackList));
 						query.on(eaWildcardJoin.pk.baseEntity.id.eq(baseEntity.id));
@@ -467,31 +458,31 @@ public class SearchUtility {
 							// build wildcard for whitelist
 							if (wilcardWhiteList.length > 0) {
 								builder.and(baseEntity.name.like(wildcardValue)
+										.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.in(wilcardWhiteList)))
 										.or(Expressions.stringTemplate("replace({0},'[\"','')", 
 												Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
 												).in(generateWildcardSubQuery(wildcardValue, depth, wilcardWhiteList, wilcardBlackList))
 										   )
-										.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.in(wilcardWhiteList)))
 										);
 
 							// build wildcard for blacklist
 							} else if (wilcardBlackList.length > 0) {
 								builder.and(baseEntity.name.like(wildcardValue)
+										.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.notIn(wilcardBlackList)))
 										.or(Expressions.stringTemplate("replace({0},'[\"','')", 
 												Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
 												).in(generateWildcardSubQuery(wildcardValue, depth, wilcardWhiteList, wilcardBlackList))
 										   )
-										.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.notIn(wilcardBlackList)))
 										);
 								
 							// build wildcard for ordinary cases
 							} else {
 								builder.and(baseEntity.name.like(wildcardValue)
+										.or(eaWildcardJoin.valueString.like(wildcardValue))
 										.or(Expressions.stringTemplate("replace({0},'[\"','')", 
 												Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
 												).in(generateWildcardSubQuery(wildcardValue, depth, wilcardWhiteList, wilcardBlackList))
 										   )
-										.or(eaWildcardJoin.valueString.like(wildcardValue))
 										);
 							}
 
@@ -650,14 +641,7 @@ public class SearchUtility {
 
 				for (int i = 0; i < entities.size(); i++) {
 
-					// String code = codes.get(i);
-					// BaseEntity be = null;
 					BaseEntity be = entities.get(i);
-					// if (cacheDB) {
-					// 	be = fetchBaseEntityFromCache(code, serviceToken);
-					// } else {
-					// 	be = cacheUtils.getBaseEntityByCode(code);
-					// }
 				
 					if (!columnWildcard) {
 						be = privacyFilter(be, allowed);
