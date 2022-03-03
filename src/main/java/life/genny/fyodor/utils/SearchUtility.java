@@ -640,7 +640,7 @@ public class SearchUtility {
 			// Fetch data and count
 			if (fetchEntities != null && fetchEntities) {
 
-				List<BaseEntity> entities = query.select(QBaseEntity.baseEntity).fetch();
+				List<BaseEntity> entities = query.select(QBaseEntity.baseEntity).distinct().fetch();
 				long count = query.fetchCount();
 
 				List<String> allowed = getSearchColumnFilterArray(searchBE);
