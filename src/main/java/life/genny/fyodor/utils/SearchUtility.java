@@ -1086,6 +1086,12 @@ public class SearchUtility {
 				updated.setValueDate(be.getUpdated().toLocalDate());
 				be.addAttribute(updated);
 			}
+			if (allowed.contains("PRI_CODE")) {
+				Attribute codeAttr = new Attribute("PRI_CODE", "Code", new DataType(String.class));
+				EntityAttribute code = new EntityAttribute(be, codeAttr, 1.0);
+				code.setValueString(be.getCode());
+				be.addAttribute(code);
+			}
 		} catch (BadDataException e) {
 			log.error("could not add special attributes to entity");
 		}
