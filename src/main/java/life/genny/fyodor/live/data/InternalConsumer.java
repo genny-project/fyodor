@@ -3,37 +3,25 @@ package life.genny.fyodor.live.data;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
-import javax.json.JsonObject;
 import javax.json.bind.Jsonb;
 import javax.json.bind.JsonbBuilder;
-import javax.json.bind.JsonbConfig;
-import javax.persistence.EntityManager;
 
 import java.time.Duration;
 import java.time.Instant;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
-import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jboss.logging.Logger;
 
 import io.quarkus.runtime.StartupEvent;
 import io.smallrye.reactive.messaging.annotations.Blocking;
-import life.genny.fyodor.intf.KafkaBean;
-import life.genny.fyodor.service.ApiService;
 import life.genny.fyodor.utils.SearchUtility;
 
-import life.genny.qwandaq.data.GennyCache;
 import life.genny.qwandaq.entity.SearchEntity;
 import life.genny.qwandaq.message.QSearchMessage;
 import life.genny.qwandaq.message.QBulkMessage;
 import life.genny.qwandaq.models.GennyToken;
-import life.genny.qwandaq.utils.BaseEntityUtils;
-import life.genny.qwandaq.utils.CacheUtils;
-import life.genny.qwandaq.utils.DatabaseUtils;
 import life.genny.qwandaq.utils.KafkaUtils;
-import life.genny.qwandaq.utils.KeycloakUtils;
-import life.genny.qwandaq.utils.QwandaUtils;
+import life.genny.serviceq.Service;
 import life.genny.qwandaq.data.BridgeSwitch;
 
 @ApplicationScoped
@@ -43,60 +31,19 @@ public class InternalConsumer {
 
     static Jsonb jsonb = JsonbBuilder.create();
 
-	@ConfigProperty(name = "genny.keycloak.url", defaultValue = "https://keycloak.gada.io")
-	String baseKeycloakUrl;
-
-	@ConfigProperty(name = "genny.keycloak.realm", defaultValue = "genny")
-	String keycloakRealm;
-
-	@ConfigProperty(name = "genny.service.username", defaultValue = "service")
-	String serviceUsername;
-
-	@ConfigProperty(name = "genny.service.password", defaultValue = "password")
-	String servicePassword;
-
-	@ConfigProperty(name = "genny.oidc.client-id", defaultValue = "backend")
-	String clientId;
-
-	@ConfigProperty(name = "genny.oidc.credentials.secret", defaultValue = "secret")
-	String secret;
-
 	@Inject
-	EntityManager entityManager;
-
-	@Inject
-	InternalProducer producer;
-
-	@Inject
-	@RestClient
-	ApiService apiService;
+	Service service;
 
 	@Inject
 	SearchUtility search;
 
-	@Inject 
-	GennyCache cache;
-
-	@Inject
-	KafkaBean kafkaBean;
-
-	GennyToken serviceToken;
-
-	BaseEntityUtils beUtils;
-
     void onStart(@Observes StartupEvent ev) {
 
-		serviceToken = KeycloakUtils.getToken(baseKeycloakUrl, keycloakRealm, clientId, secret, serviceUsername, servicePassword);
-
-		// Init Utility Objects
-		beUtils = new BaseEntityUtils(serviceToken);
-
-		// Establish connection to DB and cache, and init utilities
-		DatabaseUtils.init(entityManager);
-		CacheUtils.init(cache);
-		KafkaUtils.init(kafkaBean);
-		QwandaUtils.init(serviceToken);
-
+		service.initToken();
+		service.initDatabase();
+		service.initCache();
+		service.initAttributes();
+		service.initKafka();
 		log.info("[*] Finished Startup!");
     }
 
@@ -126,7 +73,6 @@ public class InternalConsumer {
 		}
 
 		log.info("Handling search " + searchBE.getCode());
-
 
         QBulkMessage bulkMsg = search.processSearchEntity(searchBE, userToken);
 

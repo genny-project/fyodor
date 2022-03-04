@@ -31,8 +31,6 @@ import life.genny.qwandaq.entity.BaseEntity;
 import life.genny.qwandaq.entity.SearchEntity;
 import life.genny.qwandaq.message.QSearchBeResult;
 import life.genny.qwandaq.models.GennyToken;
-import life.genny.fyodor.service.ApiService;
-import life.genny.fyodor.streams.InteractiveQueries;
 
 /**
  * SearchResource - Endpoints providing classic Genny Search functionality
@@ -54,17 +52,10 @@ public class SearchResource {
 	HttpServerRequest request;
 
 	@Inject
-	@RestClient
-	ApiService apiService;
-
-	@Inject
 	EntityManager entityManager;
 
 	@Inject
 	SearchUtility search;
-
-    @Inject
-    InteractiveQueries interactiveQueries;
 
 	Jsonb jsonb = JsonbBuilder.create();
 
