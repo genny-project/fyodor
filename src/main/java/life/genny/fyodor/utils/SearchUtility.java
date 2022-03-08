@@ -440,60 +440,64 @@ public class SearchUtility {
 							depth = depthLevelAttribute.getValueInteger();
 						}
 
+						/* 
+						 * NOTE: We must build the wildcard where condition differently for 
+						 * whitelists, blacklists and ordinary cases.
+						 */
+
+						// builder.and(
+						// 		baseEntity.name.like(wildcardValue)
+						// 		// check code for Dev UI searches
+						// 		.or(searchBE.getCode().equals("SBE_DEV_UI") ? baseEntity.code.like(wildcardValue) : null)
+						// 		.or(eaWildcardJoin.valueString.like(wildcardValue)
+						// 			.and(
+						// 				// build wildcard for whitelist
+						// 				wildcardWhiteList.length > 0 ? eaWildcardJoin.attributeCode.in(wildcardWhiteList) 
+						// 				// build wildcard for blacklist
+						// 				: wildcardBlackList.length > 0 ? eaWildcardJoin.attributeCode.notIn(wildcardBlackList)
+						// 				// nothing for ordinary cases
+						// 				: null
+						// 				)
+						// 		   )
+						// 		.or((depth != null && depth > 0) 
+						// 			? Expressions.stringTemplate("replace({0},'[\"','')", 
+						// 				Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
+						// 				).in(generateWildcardSubQuery(wildcardValue, depth, wildcardWhiteList, wildcardBlackList))
+						// 			: null
+						// 		   )
+						// 		);
+
 						// only wildcard on associations if depth is non zero
 						if (depth != null && depth > 0) {
 
-							/* 
-							 * NOTE: We must build the wildcard where condition differently for 
-							 * whitelists, blacklists and ordinary cases.
-							 */
 
-							builder.and(
-									baseEntity.name.like(wildcardValue)
-									// check code for Dev UI searches
-									.or(searchBE.getCode().equals("SBE_DEV_UI") ? baseEntity.code.like(wildcardValue) : null)
-									.or(eaWildcardJoin.valueString.like(wildcardValue)
-										.and(
-											// build wildcard for whitelist
-											wildcardWhiteList.length > 0 ? eaWildcardJoin.attributeCode.in(wildcardWhiteList) 
-											// build wildcard for blacklist
-											: wildcardBlackList.length > 0 ? eaWildcardJoin.attributeCode.notIn(wildcardBlackList)
-											// nothing for ordinary cases
-											: null)
-										)
-									.or(Expressions.stringTemplate("replace({0},'[\"','')", 
-											Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
-											).in(generateWildcardSubQuery(wildcardValue, depth, wildcardWhiteList, wildcardBlackList))
-										)
-									);
+							if (wildcardWhiteList.length > 0) {
+								builder.and(baseEntity.name.like(wildcardValue)
+										.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.in(wildcardWhiteList)))
+										.or(Expressions.stringTemplate("replace({0},'[\"','')", 
+												Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
+												).in(generateWildcardSubQuery(wildcardValue, depth, wildcardWhiteList, wildcardBlackList))
+										   )
+										);
 
-							// if (wildcardWhiteList.length > 0) {
-							// 	builder.and(baseEntity.name.like(wildcardValue)
-							// 			.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.in(wildcardWhiteList)))
-							// 			.or(Expressions.stringTemplate("replace({0},'[\"','')", 
-							// 					Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
-							// 					).in(generateWildcardSubQuery(wildcardValue, depth, wildcardWhiteList, wildcardBlackList))
-							// 			   )
-							// 			);
-
-							// } else if (wildcardBlackList.length > 0) {
-							// 	builder.and(baseEntity.name.like(wildcardValue)
-							// 			.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.notIn(wildcardBlackList)))
-							// 			.or(Expressions.stringTemplate("replace({0},'[\"','')", 
-							// 					Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
-							// 					).in(generateWildcardSubQuery(wildcardValue, depth, wildcardWhiteList, wildcardBlackList))
-							// 			   )
-							// 			);
+							} else if (wildcardBlackList.length > 0) {
+								builder.and(baseEntity.name.like(wildcardValue)
+										.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.notIn(wildcardBlackList)))
+										.or(Expressions.stringTemplate("replace({0},'[\"','')", 
+												Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
+												).in(generateWildcardSubQuery(wildcardValue, depth, wildcardWhiteList, wildcardBlackList))
+										   )
+										);
 								
-							// } else {
-							// 	builder.and(baseEntity.name.like(wildcardValue)
-							// 			.or(eaWildcardJoin.valueString.like(wildcardValue))
-							// 			.or(Expressions.stringTemplate("replace({0},'[\"','')", 
-							// 					Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
-							// 					).in(generateWildcardSubQuery(wildcardValue, depth, wildcardWhiteList, wildcardBlackList))
-							// 			   )
-							// 			);
-							// }
+							} else {
+								builder.and(baseEntity.name.like(wildcardValue)
+										.or(eaWildcardJoin.valueString.like(wildcardValue))
+										.or(Expressions.stringTemplate("replace({0},'[\"','')", 
+												Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
+												).in(generateWildcardSubQuery(wildcardValue, depth, wildcardWhiteList, wildcardBlackList))
+										   )
+										);
+							}
 
 						} else {
 
@@ -512,20 +516,20 @@ public class SearchUtility {
 										)
 									);
 
-							// if (wildcardWhiteList.length > 0) {
-							// 	builder.and(baseEntity.name.like(wildcardValue)
-							// 			.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.in(wildcardWhiteList))));
+							if (wildcardWhiteList.length > 0) {
+								builder.and(baseEntity.name.like(wildcardValue)
+										.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.in(wildcardWhiteList))));
 
-							// 	// build wildcard for blacklist
-							// } else if (wildcardBlackList.length > 0) {
-							// 	builder.and(baseEntity.name.like(wildcardValue)
-							// 			.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.notIn(wildcardBlackList))));
+								// build wildcard for blacklist
+							} else if (wildcardBlackList.length > 0) {
+								builder.and(baseEntity.name.like(wildcardValue)
+										.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.notIn(wildcardBlackList))));
 
-							// 	// build wildcard for ordinary cases
-							// } else {
-							// 	builder.and(baseEntity.name.like(wildcardValue)
-							// 			.or(eaWildcardJoin.valueString.like(wildcardValue)));
-							// }
+								// build wildcard for ordinary cases
+							} else {
+								builder.and(baseEntity.name.like(wildcardValue)
+										.or(eaWildcardJoin.valueString.like(wildcardValue)));
+							}
 						}
 					}
 				}
