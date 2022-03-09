@@ -448,7 +448,7 @@ public class SearchUtility {
 						builder.and(
 								baseEntity.name.like(wildcardValue)
 								// check code for Dev UI searches
-								.or(searchBE.getCode().equals("SBE_DEV_UI") ? baseEntity.code.like(wildcardValue) : null)
+								.or(searchBE.getCode().startsWith("SBE_DEV_UI") ? baseEntity.code.like(wildcardValue) : null)
 								.or(eaWildcardJoin.valueString.like(wildcardValue)
 									.and(
 										// build wildcard for whitelist
