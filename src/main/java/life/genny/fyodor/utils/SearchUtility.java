@@ -468,6 +468,12 @@ public class SearchUtility {
 								   )
 								);
 
+
+						/*
+						 * NOTE: the comments below will be deleted shortly, once confirmed that the above code functions well.
+						 */
+
+
 						// only wildcard on associations if depth is non zero
 						// if (depth != null && depth > 0) {
 

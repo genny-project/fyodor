@@ -103,7 +103,6 @@ public class InternalConsumer {
 		}
 
 		// publish results to destination channel
-		String json = jsonb.toJson(bulkMsg);
-		KafkaUtils.writeMsg(msg.getDestination(), json);
+		KafkaUtils.writeMsg(msg.getDestination(), bulkMsg);
 	}
 }
