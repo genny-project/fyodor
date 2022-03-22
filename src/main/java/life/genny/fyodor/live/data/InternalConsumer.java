@@ -22,7 +22,6 @@ import life.genny.qwandaq.message.QBulkMessage;
 import life.genny.qwandaq.models.GennyToken;
 import life.genny.qwandaq.utils.KafkaUtils;
 import life.genny.serviceq.Service;
-import life.genny.qwandaq.data.BridgeSwitch;
 
 @ApplicationScoped
 public class InternalConsumer {
@@ -38,6 +37,8 @@ public class InternalConsumer {
 	SearchUtility search;
 
     void onStart(@Observes StartupEvent ev) {
+
+		service.showValues();
 
 		service.initToken();
 		service.initDatabase();
@@ -58,11 +59,6 @@ public class InternalConsumer {
 		// Deserialize with null values to avoid deserialisation errors
 		QSearchMessage msg = jsonb.fromJson(data, QSearchMessage.class);
 		GennyToken userToken = new GennyToken(msg.getToken());
-
-		// update bridge switch
-		// String jti = userToken.getUniqueId();
-		// String bridgeId = msg.getBridgeId();
-		// BridgeSwitch.bridges.put(jti, bridgeId);
 
 		SearchEntity searchBE = msg.getSearchEntity();
 		log.info("Token: " + msg.getToken());
