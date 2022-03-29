@@ -1,52 +1,40 @@
 package life.genny.fyodor.endpoints;
 
-import java.util.List;
-
 import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
 import javax.json.bind.Jsonb;
 import javax.json.bind.JsonbBuilder;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.persistence.EntityManager;
-import javax.persistence.Query;
 
 import org.jboss.logging.Logger;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import io.vertx.core.http.HttpServerRequest;
 
 import life.genny.fyodor.utils.SearchUtility;
-import life.genny.qwandaq.attribute.Attribute;
-import life.genny.qwandaq.entity.BaseEntity;
 import life.genny.qwandaq.entity.SearchEntity;
 import life.genny.qwandaq.message.QSearchBeResult;
 import life.genny.qwandaq.models.GennyToken;
 
 /**
- * SearchResource - Endpoints providing classic Genny Search functionality
+ * Search - Endpoints providing classic Genny Search functionality
  */
 
 @Path("/")
 @ApplicationScoped
-public class SearchResource {
+public class Search {
 
-	private static final Logger log = Logger.getLogger(SearchResource.class);
+	private static final Logger log = Logger.getLogger(Search.class);
 
 	@ConfigProperty(name = "genny.keycloak.url", defaultValue = "https://keycloak.gada.io")
 	String baseKeycloakUrl;
-
-	@ConfigProperty(name = "project.version", defaultValue = "unknown")
-	String version;
 
 	@Context
 	HttpServerRequest request;
@@ -58,17 +46,6 @@ public class SearchResource {
 	SearchUtility search;
 
 	Jsonb jsonb = JsonbBuilder.create();
-
-	/**
-	* A GET request for the running fyodor version
-	*
-	* @return 	version data
-	 */
-	@GET
-	@Path("/api/version")
-	public Response version() {
-		return Response.ok().entity("version: " + version).build();
-	}
 
 	/**
 	 * 
