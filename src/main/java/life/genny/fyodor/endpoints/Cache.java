@@ -5,6 +5,7 @@ import javax.json.bind.Jsonb;
 import javax.json.bind.JsonbBuilder;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
+import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
@@ -17,6 +18,8 @@ import org.jboss.resteasy.annotations.jaxrs.PathParam;
 
 import io.vertx.core.http.HttpServerRequest;
 import life.genny.qwandaq.utils.CacheUtils;
+import life.genny.qwandaq.utils.HttpUtils;
+import life.genny.qwandaq.utils.SecurityUtils;
 import life.genny.serviceq.Service;
 
 /**
@@ -47,23 +50,41 @@ public class Cache {
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/{key}")
-	public Response read(@PathParam String key) {
+	public Response read(@HeaderParam("Authorization") String token, @PathParam("key") String key) {
+
+		Boolean authorized = SecurityUtils.isAuthorizedToken(token);
+		if (!authorized) {
+			return Response.status(Response.Status.BAD_REQUEST)
+				.entity(HttpUtils.error("Not authorized to make this request")).build();
+		}
 
 		String realm = service.getServiceToken().getRealm();
 		String json = (String) CacheUtils.readCache(realm, key);
+
+		if (json == null) {
+			return Response.ok("null").build();
+		}
+
+		log.info("Found json of length " + json.length() + " for " + key);
 
 		return Response.ok(json).build();
 	}
 
 	@POST
 	@Produces(MediaType.APPLICATION_JSON)
-	// @RolesAllowed({ "user" })
 	@Path("/{key}")
-	public Response write(@PathParam String key) {
+	public Response write(@HeaderParam("Authorization") String token, @PathParam("key") String key, String value) {
+
+		Boolean authorized = SecurityUtils.isAuthorizedToken(token);
+		if (!authorized) {
+			return Response.status(Response.Status.BAD_REQUEST)
+				.entity(HttpUtils.error("Not authorized to make this request")).build();
+		}
 
 		String realm = service.getServiceToken().getRealm();
-		String value = request.body().toString();
 		CacheUtils.writeCache(realm, key, value);
+
+		log.info("Wrote json of length " + value.length() + " for " + key);
 
 		return Response.ok().build();
 	}
@@ -71,10 +92,18 @@ public class Cache {
 	@DELETE
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/{key}")
-	public Response remove(@PathParam String key) {
+	public Response remove(@HeaderParam("Authorization") String token, @PathParam("key") String key) {
+
+		Boolean authorized = SecurityUtils.isAuthorizedToken(token);
+		if (!authorized) {
+			return Response.status(Response.Status.BAD_REQUEST)
+				.entity(HttpUtils.error("Not authorized to make this request")).build();
+		}
 
 		String realm = service.getServiceToken().getRealm();
 		CacheUtils.removeEntry(realm, key);
+
+		log.info("Removed Item for " + key);
 
 		return Response.ok().build();
 	}
