@@ -84,20 +84,24 @@ public class SearchUtility {
 	@Inject
 	EntityManager entityManager;
 
+	@Inject
+	QwandaUtils qwandaUtils;
+
 	GennyToken serviceToken;
 
 	BaseEntityUtils beUtils;
 
 	Jsonb jsonb = JsonbBuilder.create();
 
-    static public Map<String,Map<String, Attribute>> realmAttributeMap = new ConcurrentHashMap<>();
+	static public Map<String, Map<String, Attribute>> realmAttributeMap = new ConcurrentHashMap<>();
 
-    void onStart(@Observes StartupEvent ev) {
-		serviceToken = KeycloakUtils.getToken(baseKeycloakUrl, keycloakRealm, clientId, secret, serviceUsername, servicePassword);
+	void onStart(@Observes StartupEvent ev) {
+		serviceToken = KeycloakUtils.getToken(baseKeycloakUrl, keycloakRealm, clientId, secret, serviceUsername,
+				servicePassword);
 
 		// Init Utility Objects
 		beUtils = new BaseEntityUtils(serviceToken);
-    }
+	}
 
 	public QBulkMessage processSearchEntity(SearchEntity searchBE, GennyToken userToken) {
 
@@ -179,7 +183,8 @@ public class SearchUtility {
 		for (EntityAttribute ea : searchBE.getBaseEntityAttributes()) {
 			if (ea.getAttributeCode().startsWith("CMB_")) {
 				String combinedSearchCode = ea.getAttributeCode().substring("CMB_".length());
-				SearchEntity combinedSearch = CacheUtils.getObject(this.serviceToken.getRealm(), combinedSearchCode, SearchEntity.class);
+				SearchEntity combinedSearch = CacheUtils.getObject(this.serviceToken.getRealm(), combinedSearchCode,
+						SearchEntity.class);
 
 				Long subTotal = performCount(combinedSearch);
 				if (subTotal != null) {
@@ -192,7 +197,7 @@ public class SearchUtility {
 		}
 
 		try {
-			Attribute attrTotalResults = QwandaUtils.getAttribute("PRI_TOTAL_RESULTS");
+			Attribute attrTotalResults = qwandaUtils.getAttribute("PRI_TOTAL_RESULTS");
 			searchBE.addAnswer(new Answer(searchBE, searchBE, attrTotalResults, results.getTotal() + ""));
 		} catch (BadDataException e) {
 			log.error(e.getStackTrace());
@@ -230,7 +235,8 @@ public class SearchUtility {
 		for (EntityAttribute ea : searchBE.getBaseEntityAttributes()) {
 			if (ea.getAttributeCode().startsWith("CMB_")) {
 				String combinedSearchCode = ea.getAttributeCode().substring("CMB_".length());
-				SearchEntity combinedSearch = CacheUtils.getObject(this.serviceToken.getRealm(), combinedSearchCode, SearchEntity.class);
+				SearchEntity combinedSearch = CacheUtils.getObject(this.serviceToken.getRealm(), combinedSearchCode,
+						SearchEntity.class);
 				Long subTotal = performCount(combinedSearch);
 				if (subTotal != null) {
 					total += subTotal;
@@ -243,20 +249,20 @@ public class SearchUtility {
 	}
 
 	/**
-	* Perform a safe search using named parameters to
-	* protect from SQL Injection
-	* 
-	* @param realm				Realm to search in.
-	* @param searchBE			SearchEntity used to search.
-	* @param countOnly			Only perform a count.
-	* @param fetchEntities		Fetch Entities, or only codes.
-	* @return					Search Result Object.
+	 * Perform a safe search using named parameters to
+	 * protect from SQL Injection
+	 * 
+	 * @param realm         Realm to search in.
+	 * @param searchBE      SearchEntity used to search.
+	 * @param countOnly     Only perform a count.
+	 * @param fetchEntities Fetch Entities, or only codes.
+	 * @return Search Result Object.
 	 */
 	public QSearchBeResult findBySearch25(final SearchEntity searchBE, Boolean countOnly, Boolean fetchEntities) {
 
 		Instant start = Instant.now();
 
-		log.info("About to search ("+searchBE.getCode()+")");
+		log.info("About to search (" + searchBE.getCode() + ")");
 
 		String realm = this.serviceToken.getRealm();
 		Integer defaultPageSize = 20;
@@ -284,8 +290,10 @@ public class SearchUtility {
 		List<EntityAttribute> andAttributes = searchBE.findPrefixEntityAttributes("AND_");
 		List<EntityAttribute> orAttributes = searchBE.findPrefixEntityAttributes("OR_");
 
-		String[] wildcardWhiteList = searchBE.findPrefixEntityAttributes("WTL_").stream().map(x -> x.getAttributeCode().substring(4)).toArray(String[]::new);
-		String[] wildcardBlackList = searchBE.findPrefixEntityAttributes("BKL_").stream().map(x -> x.getAttributeCode().substring(4)).toArray(String[]::new);
+		String[] wildcardWhiteList = searchBE.findPrefixEntityAttributes("WTL_").stream()
+				.map(x -> x.getAttributeCode().substring(4)).toArray(String[]::new);
+		String[] wildcardBlackList = searchBE.findPrefixEntityAttributes("BKL_").stream()
+				.map(x -> x.getAttributeCode().substring(4)).toArray(String[]::new);
 
 		BooleanBuilder builder = new BooleanBuilder();
 
@@ -309,57 +317,69 @@ public class SearchUtility {
 				entityCodeBuilder.and(baseEntity.code.like(ea.getAsString()));
 
 				// Process any AND/OR filters for BaseEntity Code
-				andAttributes.stream().filter(x -> removePrefixFromCode(x.getAttributeCode(), "AND").equals(attributeCode)).forEach(x -> {
-					log.info("AND " + attributeCode + " like " + x.getAsString());
-					entityCodeBuilder.and(baseEntity.code.like(x.getAsString()));
-				});
-				orAttributes.stream().filter(x -> removePrefixFromCode(x.getAttributeCode(), "OR").equals(attributeCode)).forEach(x -> {
-					log.info("OR " + attributeCode + " like " + x.getAsString());
-					entityCodeBuilder.or(baseEntity.code.like(x.getAsString()));
-				});
+				andAttributes.stream()
+						.filter(x -> removePrefixFromCode(x.getAttributeCode(), "AND").equals(attributeCode))
+						.forEach(x -> {
+							log.info("AND " + attributeCode + " like " + x.getAsString());
+							entityCodeBuilder.and(baseEntity.code.like(x.getAsString()));
+						});
+				orAttributes.stream()
+						.filter(x -> removePrefixFromCode(x.getAttributeCode(), "OR").equals(attributeCode))
+						.forEach(x -> {
+							log.info("OR " + attributeCode + " like " + x.getAsString());
+							entityCodeBuilder.or(baseEntity.code.like(x.getAsString()));
+						});
 				builder.and(entityCodeBuilder);
 
-			// Handle Created Date Filters
+				// Handle Created Date Filters
 			} else if (attributeCode.startsWith("PRI_CREATED")) {
 				builder.and(getDateTimePredicate(ea, baseEntity.created));
 				// Process any AND/OR filters for this attribute
-				andAttributes.stream().filter(x -> removePrefixFromCode(x.getAttributeCode(), "AND").equals(attributeCode)).forEach(x -> {
-					builder.and(getDateTimePredicate(x, baseEntity.created));
-				});
-				orAttributes.stream().filter(x -> removePrefixFromCode(x.getAttributeCode(), "OR").equals(attributeCode)).forEach(x -> {
-					builder.or(getDateTimePredicate(x, baseEntity.created));
-				});
+				andAttributes.stream()
+						.filter(x -> removePrefixFromCode(x.getAttributeCode(), "AND").equals(attributeCode))
+						.forEach(x -> {
+							builder.and(getDateTimePredicate(x, baseEntity.created));
+						});
+				orAttributes.stream()
+						.filter(x -> removePrefixFromCode(x.getAttributeCode(), "OR").equals(attributeCode))
+						.forEach(x -> {
+							builder.or(getDateTimePredicate(x, baseEntity.created));
+						});
 
-			// Handle Updated Date Filters
+				// Handle Updated Date Filters
 			} else if (attributeCode.startsWith("PRI_UPDATED")) {
 				builder.and(getDateTimePredicate(ea, baseEntity.updated));
 				// Process any AND/OR filters for this attribute
-				andAttributes.stream().filter(x -> removePrefixFromCode(x.getAttributeCode(), "AND").equals(attributeCode)).forEach(x -> {
-					builder.and(getDateTimePredicate(x, baseEntity.updated));
-				});
-				orAttributes.stream().filter(x -> removePrefixFromCode(x.getAttributeCode(), "OR").equals(attributeCode)).forEach(x -> {
-					builder.or(getDateTimePredicate(x, baseEntity.updated));
-				});
+				andAttributes.stream()
+						.filter(x -> removePrefixFromCode(x.getAttributeCode(), "AND").equals(attributeCode))
+						.forEach(x -> {
+							builder.and(getDateTimePredicate(x, baseEntity.updated));
+						});
+				orAttributes.stream()
+						.filter(x -> removePrefixFromCode(x.getAttributeCode(), "OR").equals(attributeCode))
+						.forEach(x -> {
+							builder.or(getDateTimePredicate(x, baseEntity.updated));
+						});
 
-			// Create a Join for each attribute filters
-			} else if (
-					(attributeCode.startsWith("PRI_") || attributeCode.startsWith("LNK_"))
+				// Create a Join for each attribute filters
+			} else if ((attributeCode.startsWith("PRI_") || attributeCode.startsWith("LNK_"))
 					&& !attributeCode.equals("PRI_CODE") && !attributeCode.equals("PRI_TOTAL_RESULTS")
 					&& !attributeCode.startsWith("PRI_CREATED") && !attributeCode.startsWith("PRI_UPDATED")
-					&& !attributeCode.equals("PRI_INDEX")
-				) {
+					&& !attributeCode.equals("PRI_INDEX")) {
 
-				// Generally don't accept filter LIKE "%", unless other filters present for this attribute
+				// Generally don't accept filter LIKE "%", unless other filters present for this
+				// attribute
 				Boolean isAnyStringFilter = false;
 				try {
-					if (ea.getValueString() != null && "%".equals(ea.getValueString()) && "LIKE".equals(ea.getAttributeName())) {
+					if (ea.getValueString() != null && "%".equals(ea.getValueString())
+							&& "LIKE".equals(ea.getAttributeName())) {
 						isAnyStringFilter = true;
 					}
 				} catch (Exception e) {
-					log.error("Bad Null ["+ea+"]"+e.getLocalizedMessage());
+					log.error("Bad Null [" + ea + "]" + e.getLocalizedMessage());
 				}
 
-				String filterName = "eaFilterJoin_"+joinCounter.toString();
+				String filterName = "eaFilterJoin_" + joinCounter.toString();
 				QEntityAttribute eaFilterJoin = new QEntityAttribute(filterName);
 				joinCounter++;
 
@@ -373,25 +393,27 @@ public class SearchUtility {
 					// Ensure we now join on this LNK attr
 					joinAttributeCode = attributeCode.split("\\.")[0];
 					// Create a new set of filters just for this subquery
-					List<EntityAttribute> subQueryEaList = searchBE.getBaseEntityAttributes().stream().filter(x -> (
-							removePrefixFromCode(x.getAttributeCode(), "AND").equals(attributeCode)
-							|| removePrefixFromCode(x.getAttributeCode(), "OR").equals(attributeCode)
-							)).collect(Collectors.toList());
+					List<EntityAttribute> subQueryEaList = searchBE.getBaseEntityAttributes().stream()
+							.filter(x -> (removePrefixFromCode(x.getAttributeCode(), "AND").equals(attributeCode)
+									|| removePrefixFromCode(x.getAttributeCode(), "OR").equals(attributeCode)))
+							.collect(Collectors.toList());
 
 					// Prepare for subquery by removing base attribute codes
 					detatchBaseAttributeCode(subQueryEaList);
 					// Must strip value to get clean code
 					currentAttributeBuilder.and(
-							Expressions.stringTemplate("replace({0},'[\"','')", 
-								Expressions.stringTemplate("replace({0},'\"]','')", eaFilterJoin.valueString)
-							) .in(generateSubQuery(subQueryEaList)));
+							Expressions.stringTemplate("replace({0},'[\"','')",
+									Expressions.stringTemplate("replace({0},'\"]','')", eaFilterJoin.valueString))
+									.in(generateSubQuery(subQueryEaList)));
 				} else {
 					currentAttributeBuilder.and(getAttributeSearchColumn(ea, eaFilterJoin));
 
 					// Process any AND/OR filters for this attribute
-					andAttributes.stream().filter(x -> removePrefixFromCode(x.getAttributeCode(), "AND").equals(attributeCode)).forEach(x -> {
-						extraFilterBuilder.and(getAttributeSearchColumn(x, eaFilterJoin));
-					});
+					andAttributes.stream()
+							.filter(x -> removePrefixFromCode(x.getAttributeCode(), "AND").equals(attributeCode))
+							.forEach(x -> {
+								extraFilterBuilder.and(getAttributeSearchColumn(x, eaFilterJoin));
+							});
 					// Using Standard for-loop to allow updating trigger variable
 					for (EntityAttribute x : orAttributes) {
 						if (removePrefixFromCode(x.getAttributeCode(), "OR").equals(attributeCode)) {
@@ -405,9 +427,9 @@ public class SearchUtility {
 				if (!isAnyStringFilter) {
 
 					query.leftJoin(eaFilterJoin)
-						.on(eaFilterJoin.pk.baseEntity.id.eq(baseEntity.id)
-						.and(eaFilterJoin.attributeCode.eq(joinAttributeCode)));
-						
+							.on(eaFilterJoin.pk.baseEntity.id.eq(baseEntity.id)
+									.and(eaFilterJoin.attributeCode.eq(joinAttributeCode)));
+
 					if (extraFilterBuilder.hasValue()) {
 						if (orTrigger) {
 							currentAttributeBuilder.or(extraFilterBuilder);
@@ -417,7 +439,7 @@ public class SearchUtility {
 					}
 					builder.and(currentAttributeBuilder);
 				}
-			// Create a filter for wildcard
+				// Create a filter for wildcard
 			} else if (attributeCode.startsWith("SCH_WILDCARD")) {
 				if (ea.getValueString() != null) {
 					if (!StringUtils.isBlank(ea.getValueString())) {
@@ -434,108 +456,122 @@ public class SearchUtility {
 						query.on(eaWildcardJoin.pk.baseEntity.id.eq(baseEntity.id));
 
 						// Find the depth level for associated wildcards
-						EntityAttribute depthLevelAttribute = searchBE.findEntityAttribute("SCH_WILDCARD_DEPTH").orElse(null);
+						EntityAttribute depthLevelAttribute = searchBE.findEntityAttribute("SCH_WILDCARD_DEPTH")
+								.orElse(null);
 						Integer depth = 0;
 						if (depthLevelAttribute != null) {
 							depth = depthLevelAttribute.getValueInteger();
 						}
 
-						/* 
-						 * NOTE: We must build the wildcard where condition differently for 
+						/*
+						 * NOTE: We must build the wildcard where condition differently for
 						 * whitelists, blacklists and ordinary cases.
 						 */
 
 						builder.and(
 								baseEntity.name.like(wildcardValue)
-								// check code for Dev UI searches
-								.or(searchBE.getCode().startsWith("SBE_DEV_UI") ? baseEntity.code.like(wildcardValue) : null)
-								.or(!searchBE.getCode().startsWith("SBE_DEV_UI") ? eaWildcardJoin.valueString.like(wildcardValue)
-									.and(
-										// build wildcard for whitelist
-										wildcardWhiteList.length > 0 ? eaWildcardJoin.attributeCode.in(wildcardWhiteList) 
-										// build wildcard for blacklist
-										: wildcardBlackList.length > 0 ? eaWildcardJoin.attributeCode.notIn(wildcardBlackList)
-										// nothing for ordinary cases
-										: null
-										)
-									: null
-								   )
-								.or((depth != null && depth > 0) 
-									? Expressions.stringTemplate("replace({0},'[\"','')", 
-										Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
-										).in(generateWildcardSubQuery(wildcardValue, depth, wildcardWhiteList, wildcardBlackList))
-									: null
-								   )
-								);
-
+										// check code for Dev UI searches
+										.or(searchBE.getCode().startsWith("SBE_DEV_UI")
+												? baseEntity.code.like(wildcardValue)
+												: null)
+										.or(!searchBE.getCode().startsWith("SBE_DEV_UI")
+												? eaWildcardJoin.valueString.like(wildcardValue)
+														.and(
+																// build wildcard for whitelist
+																wildcardWhiteList.length > 0
+																		? eaWildcardJoin.attributeCode
+																				.in(wildcardWhiteList)
+																		// build wildcard for blacklist
+																		: wildcardBlackList.length > 0
+																				? eaWildcardJoin.attributeCode
+																						.notIn(wildcardBlackList)
+																				// nothing for ordinary cases
+																				: null)
+												: null)
+										.or((depth != null && depth > 0)
+												? Expressions.stringTemplate("replace({0},'[\"','')",
+														Expressions.stringTemplate("replace({0},'\"]','')",
+																eaWildcardJoin.valueString))
+														.in(generateWildcardSubQuery(wildcardValue, depth,
+																wildcardWhiteList, wildcardBlackList))
+												: null));
 
 						/*
-						 * NOTE: the comments below will be deleted shortly, once confirmed that the above code functions well.
+						 * NOTE: the comments below will be deleted shortly, once confirmed that the
+						 * above code functions well.
 						 */
-
 
 						// only wildcard on associations if depth is non zero
 						// if (depth != null && depth > 0) {
 
-						// 	if (wildcardWhiteList.length > 0) {
-						// 		builder.and(baseEntity.name.like(wildcardValue)
-						// 				.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.in(wildcardWhiteList)))
-						// 				.or(Expressions.stringTemplate("replace({0},'[\"','')", 
-						// 						Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
-						// 						).in(generateWildcardSubQuery(wildcardValue, depth, wildcardWhiteList, wildcardBlackList))
-						// 				   )
-						// 				);
+						// if (wildcardWhiteList.length > 0) {
+						// builder.and(baseEntity.name.like(wildcardValue)
+						// .or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.in(wildcardWhiteList)))
+						// .or(Expressions.stringTemplate("replace({0},'[\"','')",
+						// Expressions.stringTemplate("replace({0},'\"]','')",
+						// eaWildcardJoin.valueString)
+						// ).in(generateWildcardSubQuery(wildcardValue, depth, wildcardWhiteList,
+						// wildcardBlackList))
+						// )
+						// );
 
-						// 	} else if (wildcardBlackList.length > 0) {
-						// 		builder.and(baseEntity.name.like(wildcardValue)
-						// 				.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.notIn(wildcardBlackList)))
-						// 				.or(Expressions.stringTemplate("replace({0},'[\"','')", 
-						// 						Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
-						// 						).in(generateWildcardSubQuery(wildcardValue, depth, wildcardWhiteList, wildcardBlackList))
-						// 				   )
-						// 				);
-								
-						// 	} else {
-						// 		builder.and(baseEntity.name.like(wildcardValue)
-						// 				.or(eaWildcardJoin.valueString.like(wildcardValue))
-						// 				.or(Expressions.stringTemplate("replace({0},'[\"','')", 
-						// 						Expressions.stringTemplate("replace({0},'\"]','')", eaWildcardJoin.valueString)
-						// 						).in(generateWildcardSubQuery(wildcardValue, depth, wildcardWhiteList, wildcardBlackList))
-						// 				   )
-						// 				);
-						// 	}
+						// } else if (wildcardBlackList.length > 0) {
+						// builder.and(baseEntity.name.like(wildcardValue)
+						// .or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.notIn(wildcardBlackList)))
+						// .or(Expressions.stringTemplate("replace({0},'[\"','')",
+						// Expressions.stringTemplate("replace({0},'\"]','')",
+						// eaWildcardJoin.valueString)
+						// ).in(generateWildcardSubQuery(wildcardValue, depth, wildcardWhiteList,
+						// wildcardBlackList))
+						// )
+						// );
+
+						// } else {
+						// builder.and(baseEntity.name.like(wildcardValue)
+						// .or(eaWildcardJoin.valueString.like(wildcardValue))
+						// .or(Expressions.stringTemplate("replace({0},'[\"','')",
+						// Expressions.stringTemplate("replace({0},'\"]','')",
+						// eaWildcardJoin.valueString)
+						// ).in(generateWildcardSubQuery(wildcardValue, depth, wildcardWhiteList,
+						// wildcardBlackList))
+						// )
+						// );
+						// }
 
 						// } else {
 
-						// 	builder.and(
-						// 			baseEntity.name.like(wildcardValue)
-						// 			// check code for Dev UI searches
-						// 			.or(searchBE.getCode().equals("SBE_DEV_UI") ? baseEntity.code.like(wildcardValue) : null)
-						// 			.or(eaWildcardJoin.valueString.like(wildcardValue)
-						// 				.and(
-						// 					// build wildcard for whitelist
-						// 					wildcardWhiteList.length > 0 ? eaWildcardJoin.attributeCode.in(wildcardWhiteList) 
-						// 					// build wildcard for blacklist
-						// 					: wildcardBlackList.length > 0 ? eaWildcardJoin.attributeCode.notIn(wildcardBlackList)
-						// 					// nothing for ordinary cases
-						// 					: null)
-						// 				)
-						// 			);
+						// builder.and(
+						// baseEntity.name.like(wildcardValue)
+						// // check code for Dev UI searches
+						// .or(searchBE.getCode().equals("SBE_DEV_UI") ?
+						// baseEntity.code.like(wildcardValue) : null)
+						// .or(eaWildcardJoin.valueString.like(wildcardValue)
+						// .and(
+						// // build wildcard for whitelist
+						// wildcardWhiteList.length > 0 ?
+						// eaWildcardJoin.attributeCode.in(wildcardWhiteList)
+						// // build wildcard for blacklist
+						// : wildcardBlackList.length > 0 ?
+						// eaWildcardJoin.attributeCode.notIn(wildcardBlackList)
+						// // nothing for ordinary cases
+						// : null)
+						// )
+						// );
 
-						// 	if (wildcardWhiteList.length > 0) {
-						// 		builder.and(baseEntity.name.like(wildcardValue)
-						// 				.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.in(wildcardWhiteList))));
+						// if (wildcardWhiteList.length > 0) {
+						// builder.and(baseEntity.name.like(wildcardValue)
+						// .or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.in(wildcardWhiteList))));
 
-						// 		// build wildcard for blacklist
-						// 	} else if (wildcardBlackList.length > 0) {
-						// 		builder.and(baseEntity.name.like(wildcardValue)
-						// 				.or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.notIn(wildcardBlackList))));
+						// // build wildcard for blacklist
+						// } else if (wildcardBlackList.length > 0) {
+						// builder.and(baseEntity.name.like(wildcardValue)
+						// .or(eaWildcardJoin.valueString.like(wildcardValue).and(eaWildcardJoin.attributeCode.notIn(wildcardBlackList))));
 
-						// 		// build wildcard for ordinary cases
-						// 	} else {
-						// 		builder.and(baseEntity.name.like(wildcardValue)
-						// 				.or(eaWildcardJoin.valueString.like(wildcardValue)));
-						// 	}
+						// // build wildcard for ordinary cases
+						// } else {
+						// builder.and(baseEntity.name.like(wildcardValue)
+						// .or(eaWildcardJoin.valueString.like(wildcardValue)));
+						// }
 						// }
 					}
 				}
@@ -550,8 +586,8 @@ public class SearchUtility {
 			} else if (attributeCode.startsWith("SCH_STATUS")) {
 				Integer ordinal = ea.getValueInteger();
 				status = EEntityStatus.values()[ordinal];
-				log.info("Search Status: ["+status.toString()+":"+ordinal.toString()+"]");
-			// Add to sort list if it is a sort attribute
+				log.info("Search Status: [" + status.toString() + ":" + ordinal.toString() + "]");
+				// Add to sort list if it is a sort attribute
 			} else if (attributeCode.startsWith("SRT_")) {
 				sortAttributes.add(ea);
 			}
@@ -559,21 +595,22 @@ public class SearchUtility {
 		// Add BaseEntity Status expression
 		builder.and(baseEntity.status.loe(status));
 		// Order the sorts by weight
-		Comparator<EntityAttribute> compareByWeight = (EntityAttribute a, EntityAttribute b) -> a.getWeight().compareTo(b.getWeight());
+		Comparator<EntityAttribute> compareByWeight = (EntityAttribute a, EntityAttribute b) -> a.getWeight()
+				.compareTo(b.getWeight());
 		Collections.sort(sortAttributes, compareByWeight);
 		// Create a Join for each sort
 		for (EntityAttribute sort : sortAttributes) {
 
 			String attributeCode = sort.getAttributeCode();
 			log.info("Sorting with " + attributeCode);
-			QEntityAttribute eaOrderJoin = new QEntityAttribute("eaOrderJoin_"+joinCounter.toString());
+			QEntityAttribute eaOrderJoin = new QEntityAttribute("eaOrderJoin_" + joinCounter.toString());
 			joinCounter++;
 
 			if (!(attributeCode.startsWith("SRT_PRI_CREATED") || attributeCode.startsWith("SRT_PRI_UPDATED")
-				|| attributeCode.startsWith("SRT_PRI_CODE") || attributeCode.startsWith("SRT_PRI_NAME"))) {
+					|| attributeCode.startsWith("SRT_PRI_CODE") || attributeCode.startsWith("SRT_PRI_NAME"))) {
 				query.leftJoin(eaOrderJoin)
-					.on(eaOrderJoin.pk.baseEntity.id.eq(baseEntity.id)
-					.and(eaOrderJoin.attributeCode.eq(attributeCode)));
+						.on(eaOrderJoin.pk.baseEntity.id.eq(baseEntity.id)
+								.and(eaOrderJoin.attributeCode.eq(attributeCode)));
 			}
 
 			ComparableExpressionBase orderColumn = null;
@@ -588,7 +625,7 @@ public class SearchUtility {
 				orderColumn = baseEntity.name;
 			} else {
 				// Use Attribute Code to find the datatype, and thus the DB field to sort on
-				Attribute attr = QwandaUtils.getAttribute(attributeCode.substring("SRT_".length()));
+				Attribute attr = qwandaUtils.getAttribute(attributeCode.substring("SRT_".length()));
 				String dtt = attr.getDataType().getClassName();
 				orderColumn = getPathFromDatatype(dtt, eaOrderJoin);
 			}
@@ -609,10 +646,10 @@ public class SearchUtility {
 			QEntityEntity linkJoin = new QEntityEntity("linkJoin");
 			BooleanBuilder linkBuilder = new BooleanBuilder();
 
-			log.info("Source Code is "+sourceCode);
-			log.info("Target Code is "+targetCode);
-			log.info("Link Code is "+linkCode);
-			log.info("Link Value is "+linkValue);
+			log.info("Source Code is " + sourceCode);
+			log.info("Target Code is " + targetCode);
+			log.info("Link Code is " + linkCode);
+			log.info("Link Value is " + linkValue);
 			if (sourceCode == null && targetCode == null) {
 				// Only look in targetCode if both are null
 				linkBuilder.and(linkJoin.link.targetCode.eq(baseEntity.code));
@@ -646,7 +683,7 @@ public class SearchUtility {
 		if (searchBE.getCode().startsWith("SBE_SEARCHBAR")) {
 			// search across people and companies
 			builder.and(baseEntity.code.like("PER_%"))
-				.or(baseEntity.code.like("CPY_%"));
+					.or(baseEntity.code.like("CPY_%"));
 		}
 
 		// Add all builder conditions to query
@@ -655,7 +692,8 @@ public class SearchUtility {
 		query.offset(pageStart).limit(pageSize);
 
 		Instant middle = Instant.now();
-		log.info("Finished BUILDING query with duration: " + Duration.between(start, middle).toMillis() + " millSeconds.");
+		log.info("Finished BUILDING query with duration: " + Duration.between(start, middle).toMillis()
+				+ " millSeconds.");
 
 		if (countOnly) {
 			// Fetch only the count
@@ -676,7 +714,7 @@ public class SearchUtility {
 				for (int i = 0; i < entities.size(); i++) {
 
 					BaseEntity be = entities.get(i);
-				
+
 					if (!columnWildcard) {
 						be = privacyFilter(be, allowed);
 					}
@@ -731,7 +769,7 @@ public class SearchUtility {
 			}
 		}
 		log.info(ea.getAttributeCode() + " " + condition + " " + dateTime);
-			
+
 		if (condition.equals(">=") || condition.equals(">")) {
 			return path.after(dateTime);
 		} else if (condition.equals("<=") || condition.equals("<")) {
@@ -742,13 +780,13 @@ public class SearchUtility {
 		// Default to equals
 		return path.eq(dateTime);
 	}
-	
+
 	/**
-	* return a predicate based on the attribute value and datatype
-	*
-	* @param ea
-	* @param entityAttribute
-	* @return
+	 * return a predicate based on the attribute value and datatype
+	 *
+	 * @param ea
+	 * @param entityAttribute
+	 * @return
 	 */
 	public static Predicate getAttributeSearchColumn(EntityAttribute ea, QEntityAttribute entityAttribute) {
 
@@ -862,11 +900,11 @@ public class SearchUtility {
 	}
 
 	/**
-	* Find the value column based off of the attribute datatype
-	*
-	* @param dtt
-	* @param entityAttribute
-	* @return
+	 * Find the value column based off of the attribute datatype
+	 *
+	 * @param dtt
+	 * @param entityAttribute
+	 * @return
 	 */
 	public static ComparableExpressionBase getPathFromDatatype(String dtt, QEntityAttribute entityAttribute) {
 
@@ -894,13 +932,12 @@ public class SearchUtility {
 		return entityAttribute.valueString;
 	}
 
-
 	/**
-	* For association filter of format like LNK_PERSON.LNK_COMPANY.PRI_NAME,
-	* this function wil strip the first code in that chain of attributes
-	* whilst retaining any AND/OR prefixs.
-	* 
-	* @param eaList
+	 * For association filter of format like LNK_PERSON.LNK_COMPANY.PRI_NAME,
+	 * this function wil strip the first code in that chain of attributes
+	 * whilst retaining any AND/OR prefixs.
+	 * 
+	 * @param eaList
 	 */
 	public static void detatchBaseAttributeCode(List<EntityAttribute> eaList) {
 
@@ -927,25 +964,27 @@ public class SearchUtility {
 	}
 
 	/**
-	* Create a sub query for searhing across LNK associations
-	*
-	* This is a recursive function that can run as many 
-	* times as is specified by the attribute.
-	*
-	* @param ea The EntityAttribute filter from SBE
-	* @return the subquery object
+	 * Create a sub query for searhing across LNK associations
+	 *
+	 * This is a recursive function that can run as many
+	 * times as is specified by the attribute.
+	 *
+	 * @param ea The EntityAttribute filter from SBE
+	 * @return the subquery object
 	 */
 	public static JPQLQuery generateSubQuery(List<EntityAttribute> eaList) {
 
 		// Find first attribute that is not AND/OR. There should be only one
-		EntityAttribute ea = eaList.stream().filter(x -> (!x.getAttributeCode().startsWith("AND_") && !x.getAttributeCode().startsWith("OR_"))).findFirst().get();
+		EntityAttribute ea = eaList.stream()
+				.filter(x -> (!x.getAttributeCode().startsWith("AND_") && !x.getAttributeCode().startsWith("OR_")))
+				.findFirst().get();
 
 		// Random uuid for uniqueness in the query string
 		String uuid = UUID.randomUUID().toString().substring(0, 8);
 
 		// Define items to base query upon
-		QBaseEntity baseEntity = new QBaseEntity("baseEntity_"+uuid);
-		QEntityAttribute entityAttribute = new QEntityAttribute("entityAttribute_"+uuid);
+		QBaseEntity baseEntity = new QBaseEntity("baseEntity_" + uuid);
+		QEntityAttribute entityAttribute = new QEntityAttribute("entityAttribute_" + uuid);
 
 		// Unpack each attributeCode
 		String[] associationArray = ea.getAttributeCode().split("\\.");
@@ -956,14 +995,14 @@ public class SearchUtility {
 
 			// Recursive search
 			return JPAExpressions.selectDistinct(baseEntity.code)
-				.from(baseEntity)
-				.leftJoin(entityAttribute)
-				.on(entityAttribute.pk.baseEntity.id.eq(baseEntity.id)
-						.and(entityAttribute.attributeCode.eq(baseAttributeCode)))
-				.where(
-					Expressions.stringTemplate("replace({0},'[\"','')", 
-						Expressions.stringTemplate("replace({0},'\"]','')", entityAttribute.valueString)
-					).in(generateSubQuery(eaList)));
+					.from(baseEntity)
+					.leftJoin(entityAttribute)
+					.on(entityAttribute.pk.baseEntity.id.eq(baseEntity.id)
+							.and(entityAttribute.attributeCode.eq(baseAttributeCode)))
+					.where(
+							Expressions.stringTemplate("replace({0},'[\"','')",
+									Expressions.stringTemplate("replace({0},'\"]','')", entityAttribute.valueString))
+									.in(generateSubQuery(eaList)));
 		} else {
 
 			// Create SubQuery Builder parameters using filters
@@ -971,67 +1010,66 @@ public class SearchUtility {
 			builder.and(getAttributeSearchColumn(ea, entityAttribute));
 
 			// Process AND Filters
-			eaList.stream().filter(x -> 
-					x.getAttributeCode().startsWith("AND")
+			eaList.stream().filter(x -> x.getAttributeCode().startsWith("AND")
 					&& removePrefixFromCode(x.getAttributeCode(), "AND").equals(baseAttributeCode))
-				.forEach(x -> {
-					builder.and(getAttributeSearchColumn(x, entityAttribute));
-			});
+					.forEach(x -> {
+						builder.and(getAttributeSearchColumn(x, entityAttribute));
+					});
 			// Process OR Filters
-			eaList.stream().filter(x -> 
-					x.getAttributeCode().startsWith("OR")
+			eaList.stream().filter(x -> x.getAttributeCode().startsWith("OR")
 					&& removePrefixFromCode(x.getAttributeCode(), "OR").equals(baseAttributeCode))
-				.forEach(x -> {
-					builder.or(getAttributeSearchColumn(x, entityAttribute));
-			});
+					.forEach(x -> {
+						builder.or(getAttributeSearchColumn(x, entityAttribute));
+					});
 
 			// Return the final SubQuery
 			return JPAExpressions.selectDistinct(baseEntity.code)
-				.from(baseEntity)
-				.leftJoin(entityAttribute)
-				.on(entityAttribute.pk.baseEntity.id.eq(baseEntity.id)
-					.and(entityAttribute.attributeCode.eq(baseAttributeCode)))
-				.where(builder);
+					.from(baseEntity)
+					.leftJoin(entityAttribute)
+					.on(entityAttribute.pk.baseEntity.id.eq(baseEntity.id)
+							.and(entityAttribute.attributeCode.eq(baseAttributeCode)))
+					.where(builder);
 		}
 	}
 
 	/**
-	* Generate a sub query to perform a wildcard search on valueString
-	*
-	* @param value
-	* @param recursion
-	* @param whitelist
-	* @param blacklist
-	* @return
+	 * Generate a sub query to perform a wildcard search on valueString
+	 *
+	 * @param value
+	 * @param recursion
+	 * @param whitelist
+	 * @param blacklist
+	 * @return
 	 */
-	public static JPQLQuery generateWildcardSubQuery(String value, Integer recursion, String[] whitelist, String[] blacklist) {
+	public static JPQLQuery generateWildcardSubQuery(String value, Integer recursion, String[] whitelist,
+			String[] blacklist) {
 
 		// Random uuid to for uniqueness in the query string
 		String uuid = UUID.randomUUID().toString().substring(0, 8);
 
 		// Define items to query base upon
-		QBaseEntity baseEntity = new QBaseEntity("baseEntity_"+uuid);
-		QEntityAttribute entityAttribute = new QEntityAttribute("entityAttribute_"+uuid);
+		QBaseEntity baseEntity = new QBaseEntity("baseEntity_" + uuid);
+		QEntityAttribute entityAttribute = new QEntityAttribute("entityAttribute_" + uuid);
 
 		JPQLQuery exp = JPAExpressions.selectDistinct(baseEntity.code)
-			.from(baseEntity)
-			.leftJoin(entityAttribute);
+				.from(baseEntity)
+				.leftJoin(entityAttribute);
 
 		// Handle whitelisting and blacklisting
 		if (whitelist.length > 0) {
 			exp.on(entityAttribute.pk.baseEntity.id.eq(baseEntity.id).and(entityAttribute.attributeCode.in(whitelist)));
 		} else if (blacklist.length > 0) {
-			exp.on(entityAttribute.pk.baseEntity.id.eq(baseEntity.id).and(entityAttribute.attributeCode.notIn(blacklist)));
+			exp.on(entityAttribute.pk.baseEntity.id.eq(baseEntity.id)
+					.and(entityAttribute.attributeCode.notIn(blacklist)));
 		} else {
 			exp.on(entityAttribute.pk.baseEntity.id.eq(baseEntity.id));
 		}
 
 		if (recursion > 1) {
 			exp.where(entityAttribute.valueString.like(value)
-				.or(Expressions.stringTemplate("replace({0},'[\"','')", 
-					Expressions.stringTemplate("replace({0},'\"]','')", entityAttribute.valueString)
-					).in(generateWildcardSubQuery(value, recursion-1, whitelist, blacklist))
-			   ));
+					.or(Expressions.stringTemplate("replace({0},'[\"','')",
+							Expressions.stringTemplate("replace({0},'\"]','')", entityAttribute.valueString))
+							.in(generateWildcardSubQuery(value, recursion - 1, whitelist, blacklist))));
 		} else {
 			exp.where(entityAttribute.valueString.like(value));
 		}
@@ -1055,8 +1093,7 @@ public class SearchUtility {
 		return formatted;
 	}
 
-	public static List<String> getSearchColumnFilterArray(SearchEntity searchBE)
-	{
+	public static List<String> getSearchColumnFilterArray(SearchEntity searchBE) {
 		List<String> attributeFilter = new ArrayList<String>();
 		List<String> assocAttributeFilter = new ArrayList<String>();
 
@@ -1071,7 +1108,7 @@ public class SearchUtility {
 					String[] splitCode = attributeCode.substring("COL__".length()).split("__");
 					assocAttributeFilter.add(splitCode[0]);
 				} else {
-				attributeFilter.add(attributeCode.substring("COL_".length()));
+					attributeFilter.add(attributeCode.substring("COL_".length()));
 				}
 			}
 		}
@@ -1079,15 +1116,14 @@ public class SearchUtility {
 		return attributeFilter;
 	}
 
-    public static BaseEntity privacyFilter(BaseEntity be, List<String> allowed) {
-		
+	public static BaseEntity privacyFilter(BaseEntity be, List<String> allowed) {
+
 		// Filter out unwanted attributes
 		be.setBaseEntityAttributes(
 				be.getBaseEntityAttributes()
-				.stream()
-				.filter(x -> allowed.contains(x.getAttributeCode()))
-				.collect(Collectors.toSet())
-			);
+						.stream()
+						.filter(x -> allowed.contains(x.getAttributeCode()))
+						.collect(Collectors.toSet()));
 
 		return be;
 	}
@@ -1130,8 +1166,8 @@ public class SearchUtility {
 			log.error("could not add special attributes to entity");
 		}
 
-        return be;
-    }
+		return be;
+	}
 
 	public Answer getAssociatedColumnValue(BaseEntity baseBE, String calEACode) {
 
@@ -1140,7 +1176,7 @@ public class SearchUtility {
 			log.error("CALS length is bad for :" + calEACode);
 			return null;
 		}
-		String linkBeCode = calFields[calFields.length-1];
+		String linkBeCode = calFields[calFields.length - 1];
 
 		BaseEntity be = baseBE;
 
@@ -1150,14 +1186,14 @@ public class SearchUtility {
 
 		String finalAttributeCode = calEACode.substring("COL_".length());
 		// Fetch The Attribute of the last code
-		String primaryAttrCode = calFields[calFields.length-1];
-		Attribute primaryAttribute = QwandaUtils.getAttribute(primaryAttrCode);
+		String primaryAttrCode = calFields[calFields.length - 1];
+		Attribute primaryAttribute = qwandaUtils.getAttribute(primaryAttrCode);
 
 		Answer ans = new Answer(baseBE.getCode(), baseBE.getCode(), finalAttributeCode, "");
 		Attribute att = new Attribute(finalAttributeCode, primaryAttribute.getName(), primaryAttribute.getDataType());
 		ans.setAttribute(att);
 
-		for (int i = 0; i < calFields.length-1; i++) {
+		for (int i = 0; i < calFields.length - 1; i++) {
 
 			String attributeCode = calFields[i];
 			String calBe = be.getValueAsString(attributeCode);
@@ -1169,7 +1205,8 @@ public class SearchUtility {
 
 				for (String code : codeArr) {
 					if (StringUtils.isBlank(code)) {
-						log.error("code from Calfields is empty calVal["+calVal+"] skipping calFields=["+calFields.toString()+"] - be:"+baseBE.getCode());
+						log.error("code from Calfields is empty calVal[" + calVal + "] skipping calFields=["
+								+ calFields.toString() + "] - be:" + baseBE.getCode());
 						continue;
 					}
 
@@ -1179,7 +1216,7 @@ public class SearchUtility {
 						return null;
 					}
 
-					if (i == (calFields.length-2)) {
+					if (i == (calFields.length - 2)) {
 						associateEa = associatedBe.findEntityAttribute(linkBeCode);
 
 						if (associateEa != null && (associateEa.isPresent() || ("PRI_NAME".equals(linkBeCode)))) {
