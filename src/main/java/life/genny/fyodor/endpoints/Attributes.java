@@ -49,7 +49,7 @@ public class Attributes {
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/{code}")
-	public Response read(@HeaderParam("Authorization") String token, @PathParam String code) {
+	public Response read(@HeaderParam("Authorization") String token, @PathParam("code") String code) {
 
 		Boolean authorized = SecurityUtils.isAuthorizedToken(token);
 		if (!authorized) {
