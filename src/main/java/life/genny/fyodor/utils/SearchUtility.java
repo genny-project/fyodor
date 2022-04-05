@@ -976,7 +976,7 @@ public class SearchUtility {
 
 	/**
 	 * Create a sub query for searhing across LNK associations
-	 *
+	 * <p>
 	 * This is a recursive function that can run as many
 	 * times as is specified by the attribute.
 	 *
@@ -1258,48 +1258,46 @@ public class SearchUtility {
 
 	public BaseEntity format(BaseEntity be, Map<String, Map<String, String>> formatters) {
 		formatters
-			.forEach((k, v) -> {
-				log.info("key: "+k);
-				log.info("value: "+v);
-				for (EntityAttribute ea : be.getBaseEntityAttributes()) {
-					String attrCode = ea.getAttributeCode();
-					if (ea.getAttributeCode().equals(k) && (attrCode.startsWith("LNK") || attrCode.startsWith("PRI"))) {
-						Object attrVal = ea.getValue();
-						if (attrVal != null) {
+				.forEach((k, v) -> {
+					log.info("key: " + k);
+					log.info("value: " + v);
+					for (EntityAttribute ea : be.getBaseEntityAttributes()) {
+						String attrCode = ea.getAttributeCode();
+						if (ea.getAttributeCode().equals(k) && (attrCode.startsWith("LNK") || attrCode.startsWith("PRI"))) {
+							Object attrVal = ea.getValue();
+							if (attrVal != null) {
 
-							String valueString = attrVal.toString();
+								String valueString = attrVal.toString();
 
-							if (attrVal.getClass().equals(LocalDate.class)) {
-								if (v.containsKey("DATEFORMAT")) {
-									String format = (String) v.get("DATEFORMAT");
-									valueString = TimeUtils.formatDate((LocalDate) attrVal, format);
-								} else {
-									log.info("No DATEFORMAT key present in context map, defaulting to stringified date");
+								if (attrVal.getClass().equals(LocalDate.class)) {
+									if (v.containsKey("DATEFORMAT")) {
+										String format = (String) v.get("DATEFORMAT");
+										valueString = TimeUtils.formatDate((LocalDate) attrVal, format);
+									} else {
+										log.info("No DATEFORMAT key present in context map, defaulting to stringified date");
+									}
+								} else if (attrVal.getClass().equals(LocalDateTime.class)) {
+									if (v.containsKey("DATETIMEFORMAT")) {
+										String timezone = be.getValue("PRI_TIMEZONE_ID", "UTC");
+										String format = (String) v.get("DATETIMEFORMAT");
+										LocalDateTime dtt = (LocalDateTime) attrVal;
+
+										ZonedDateTime zonedDateTime = dtt.atZone(ZoneId.of("UTC"));
+										ZonedDateTime converted = zonedDateTime.withZoneSameInstant(ZoneId.of(timezone));
+
+										valueString = TimeUtils.formatZonedDateTime(converted, format);
+										log.info("date format");
+										log.info("formatted date: " + valueString);
+									} else {
+										log.info("No DATETIMEFORMAT key present in context map, defaulting to stringified dateTime");
+									}
 								}
-							} else if (attrVal.getClass().equals(LocalDateTime.class)) {
-								if (v.containsKey("DATETIMEFORMAT")) {
-									String timezone = be.getValue("PRI_TIMEZONE_ID", "UTC");
-									String format = (String) v.get("DATETIMEFORMAT");
-									LocalDateTime dtt = (LocalDateTime) attrVal;
-
-									ZonedDateTime zonedDateTime = dtt.atZone(ZoneId.of("UTC"));
-									ZonedDateTime converted = zonedDateTime.withZoneSameInstant(ZoneId.of(timezone));
-
-									valueString = TimeUtils.formatZonedDateTime(converted, format);
-									log.info("date format");
-									log.info("formatted date: " + valueString);
-								} else {
-									log.info("No DATETIMEFORMAT key present in context map, defaulting to stringified dateTime");
-								}
+								ea.setValue(valueString);
 							}
-							ea.setValue(valueString);
 						}
 					}
-				}
-			});
+				});
 		return be;
 	}
-
-}
 
 }
