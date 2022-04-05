@@ -85,6 +85,9 @@ public class SearchUtility {
 	@Inject
 	EntityManager entityManager;
 
+	@Inject
+	QwandaUtils qwandaUtils;
+
 	GennyToken serviceToken;
 
 	BaseEntityUtils beUtils;
@@ -193,7 +196,7 @@ public class SearchUtility {
 		}
 
 		try {
-			Attribute attrTotalResults = QwandaUtils.getAttribute("PRI_TOTAL_RESULTS");
+			Attribute attrTotalResults = qwandaUtils.getAttribute("PRI_TOTAL_RESULTS");
 			searchBE.addAnswer(new Answer(searchBE, searchBE, attrTotalResults, results.getTotal() + ""));
 		} catch (BadDataException e) {
 			log.error(e.getStackTrace());
@@ -589,7 +592,7 @@ public class SearchUtility {
 				orderColumn = baseEntity.name;
 			} else {
 				// Use Attribute Code to find the datatype, and thus the DB field to sort on
-				Attribute attr = QwandaUtils.getAttribute(attributeCode.substring("SRT_".length()));
+				Attribute attr = qwandaUtils.getAttribute(attributeCode.substring("SRT_".length()));
 				String dtt = attr.getDataType().getClassName();
 				orderColumn = getPathFromDatatype(dtt, eaOrderJoin);
 			}
@@ -1162,7 +1165,7 @@ public class SearchUtility {
 		String finalAttributeCode = calEACode.substring("COL_".length());
 		// Fetch The Attribute of the last code
 		String primaryAttrCode = calFields[calFields.length-1];
-		Attribute primaryAttribute = QwandaUtils.getAttribute(primaryAttrCode);
+		Attribute primaryAttribute = qwandaUtils.getAttribute(primaryAttrCode);
 
 		Answer ans = new Answer(baseBE.getCode(), baseBE.getCode(), finalAttributeCode, "");
 		Attribute att = new Attribute(finalAttributeCode, primaryAttribute.getName(), primaryAttribute.getDataType());
