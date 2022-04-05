@@ -54,6 +54,7 @@ import life.genny.qwandaq.utils.BaseEntityUtils;
 import life.genny.qwandaq.utils.CacheUtils;
 import life.genny.qwandaq.utils.KeycloakUtils;
 import life.genny.qwandaq.utils.QwandaUtils;
+import life.genny.qwandaq.utils.MergeUtils;
 
 @ApplicationScoped
 public class SearchUtility {
@@ -673,9 +674,20 @@ public class SearchUtility {
 
 				Boolean columnWildcard = searchBE.findEntityAttribute("COL_*").isPresent();
 
+				Boolean enableFormatting = false;
+				Map<String, Map<String, String>> formatters = searchBE.getFormatters();
+
+				if (formatters != null && !formatters.isEmpty()) {
+					enableFormatting = true;
+				}
+
 				for (int i = 0; i < entities.size(); i++) {
 
 					BaseEntity be = entities.get(i);
+
+					if (enableFormatting) {
+						format(be, searchBE.getFormatters());
+					}
 				
 					if (!columnWildcard) {
 						be = privacyFilter(be, allowed);
@@ -1206,6 +1218,52 @@ public class SearchUtility {
 		}
 
 		return ans;
+	}
+
+
+
+	public static BaseEntity format(BaseEntity be, Map<String, Map<String, String>> formatters) {
+		formatters
+			.forEach((k, v) -> {
+				log.info("key: "+k);
+				log.info("value: "+v);
+				for (EntityAttribute ea : be.getBaseEntityAttributes()) {
+					String attrCode = ea.getAttributeCode();
+					if (ea.getAttributeCode().equals(k) && (attrCode.startsWith("LNK") || attrCode.startsWith("PRI"))) {
+						Object attrVal = ea.getValue();
+						if (attrVal != null) {
+
+							String valueString = attrVal.toString();
+
+							if (attrVal.getClass().equals(LocalDate.class)) {
+								if (v.containsKey("DATEFORMAT")) {
+									String format = (String) v.get("DATEFORMAT");
+									valueString = MergeUtils.getFormattedDateString((LocalDate) attrVal, format);
+								} else {
+									log.info("No DATEFORMAT key present in context map, defaulting to stringified date");
+								}
+							} else if (attrVal.getClass().equals(LocalDateTime.class)) {
+								if (v.containsKey("DATETIMEFORMAT")) {
+									String timezone = be.getValue("PRI_TIMEZONE_ID", "UTC");
+									String format = (String) v.get("DATETIMEFORMAT");
+									LocalDateTime dtt = (LocalDateTime) attrVal;
+
+									ZonedDateTime zonedDateTime = dtt.atZone(ZoneId.of("UTC"));
+									ZonedDateTime converted = zonedDateTime.withZoneSameInstant(ZoneId.of(timezone));
+
+									valueString = MergeUtils.getFormattedZonedDateTimeString(converted, format);
+									log.info("date format");
+									log.info("formatted date: " + valueString);
+								} else {
+									log.info("No DATETIMEFORMAT key present in context map, defaulting to stringified dateTime");
+								}
+							}
+							ea.setValue(valueString);
+						}
+					}
+				}
+			});
+		return be;
 	}
 
 }
