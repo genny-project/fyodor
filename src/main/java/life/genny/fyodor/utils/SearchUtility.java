@@ -1235,7 +1235,7 @@ public class SearchUtility {
 							if (attrVal.getClass().equals(LocalDate.class)) {
 								if (v.containsKey("DATEFORMAT")) {
 									String format = (String) v.get("DATEFORMAT");
-									valueString = MergeUtils.getFormattedDateString((LocalDate) attrVal, format);
+									valueString = TimeUtils.formatDate((LocalDate) attrVal, format);
 								} else {
 									log.info("No DATEFORMAT key present in context map, defaulting to stringified date");
 								}
@@ -1248,7 +1248,7 @@ public class SearchUtility {
 									ZonedDateTime zonedDateTime = dtt.atZone(ZoneId.of("UTC"));
 									ZonedDateTime converted = zonedDateTime.withZoneSameInstant(ZoneId.of(timezone));
 
-									valueString = MergeUtils.getFormattedZonedDateTimeString(converted, format);
+									valueString = TimeUtils.formatZonedDateTime(converted, format);
 									log.info("date format");
 									log.info("formatted date: " + valueString);
 								} else {
