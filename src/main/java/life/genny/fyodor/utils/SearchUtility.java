@@ -692,8 +692,7 @@ public class SearchUtility {
         query.offset(pageStart).limit(pageSize);
 
         Instant middle = Instant.now();
-        log.info("Finished BUILDING query with duration: " + Duration.between(start, middle).toMillis()
-                + " millSeconds.");
+        log.info("a");
 
         if (countOnly) {
             // Fetch only the count
@@ -715,9 +714,9 @@ public class SearchUtility {
                 Map<String, Map<String, String>> formatters = searchBE.getFormatters();
 
                 if (formatters != null && !formatters.isEmpty()) {
-                    log.debug("Enable Formatting: "+ enableFormatting);
+                    log.info("Enable Formatting: "+ enableFormatting);
                     enableFormatting = true;
-                    log.debug("formatters: "+ formatters);
+                    log.info("formatters: "+ formatters);
                 }
 
                 for (int i = 0; i < entities.size(); i++) {
