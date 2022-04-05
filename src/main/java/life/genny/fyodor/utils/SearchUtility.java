@@ -1219,7 +1219,7 @@ public class SearchUtility {
 		return ans;
 	}
 
-	public static BaseEntity format(BaseEntity be, Map<String, Map<String, String>> formatters) {
+	public BaseEntity format(BaseEntity be, Map<String, Map<String, String>> formatters) {
 		formatters
 			.forEach((k, v) -> {
 				log.info("key: "+k);

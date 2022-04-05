@@ -72,6 +72,11 @@
       <artifactId>kafka</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>life.genny</groupId>
+      <artifactId>qwandaq</artifactId>
+      <version>${genny.version}</version>
+    </dependency>
   </dependencies>
   <build>
     <plugins>
