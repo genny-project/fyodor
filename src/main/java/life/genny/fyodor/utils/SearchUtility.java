@@ -715,7 +715,9 @@ public class SearchUtility {
                 Map<String, Map<String, String>> formatters = searchBE.getFormatters();
 
                 if (formatters != null && !formatters.isEmpty()) {
+                    log.debug("Enable Formatting: "+ enableFormatting);
                     enableFormatting = true;
+                    log.debug("formatters: "+ formatters);
                 }
 
                 for (int i = 0; i < entities.size(); i++) {
@@ -724,7 +726,7 @@ public class SearchUtility {
 
                     if (enableFormatting) {
                         try {
-                            be = format(be, searchBE.getFormatters());
+                            be = format(be,formatters);
                         } catch (Exception ex) {
                             log.error("Exception: {}", ex);
                         }
@@ -1261,6 +1263,7 @@ public class SearchUtility {
     }
 
     public BaseEntity format(BaseEntity be, Map<String, Map<String, String>> formatters) {
+        log.info("Formatter called for be: "+ be.getCode());
         formatters
                 .forEach((k, v) -> {
                     log.info("key: " + k);
