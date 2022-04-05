@@ -54,6 +54,7 @@ import life.genny.qwandaq.utils.BaseEntityUtils;
 import life.genny.qwandaq.utils.CacheUtils;
 import life.genny.qwandaq.utils.KeycloakUtils;
 import life.genny.qwandaq.utils.QwandaUtils;
+import life.genny.qwandaq.utils.MergeUtils;
 
 @ApplicationScoped
 public class SearchUtility {
