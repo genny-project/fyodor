@@ -38,13 +38,16 @@ public class Entities {
 	HttpServerRequest request;
 
 	@Inject
+	DatabaseUtils databaseUtils;
+
+	@Inject
 	Service service;
 
 	/**
-	* Read an item from the cache.
-	*
-	* @param key The key of the cache item
-	* @return The json item
+	 * Read an item from the cache.
+	 *
+	 * @param key The key of the cache item
+	 * @return The json item
 	 */
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
@@ -54,11 +57,11 @@ public class Entities {
 		Boolean authorized = SecurityUtils.isAuthorizedToken(token);
 		if (!authorized) {
 			return Response.status(Response.Status.BAD_REQUEST)
-				.entity(HttpUtils.error("Not authorized to make this request")).build();
+					.entity(HttpUtils.error("Not authorized to make this request")).build();
 		}
 
 		String realm = service.getServiceToken().getRealm();
-		BaseEntity entity = DatabaseUtils.findBaseEntityByCode(realm, code);
+		BaseEntity entity = databaseUtils.findBaseEntityByCode(realm, code);
 
 		return Response.ok(entity).build();
 	}

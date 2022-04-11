@@ -38,13 +38,16 @@ public class Attributes {
 	HttpServerRequest request;
 
 	@Inject
+	DatabaseUtils databaseUtils;
+
+	@Inject
 	Service service;
 
 	/**
-	* Read an item from the cache.
-	*
-	* @param key The key of the cache item
-	* @return The json item
+	 * Read an item from the cache.
+	 *
+	 * @param key The key of the cache item
+	 * @return The json item
 	 */
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
@@ -54,11 +57,11 @@ public class Attributes {
 		Boolean authorized = SecurityUtils.isAuthorizedToken(token);
 		if (!authorized) {
 			return Response.status(Response.Status.BAD_REQUEST)
-				.entity(HttpUtils.error("Not authorized to make this request")).build();
+					.entity(HttpUtils.error("Not authorized to make this request")).build();
 		}
 
 		String realm = service.getServiceToken().getRealm();
-		Attribute attribute = DatabaseUtils.findAttributeByCode(realm, code);
+		Attribute attribute = databaseUtils.findAttributeByCode(realm, code);
 
 		return Response.ok(attribute).build();
 	}
