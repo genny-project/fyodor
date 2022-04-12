@@ -692,14 +692,17 @@ public class SearchUtility {
         query.offset(pageStart).limit(pageSize);
 
         Instant middle = Instant.now();
-        log.info("a");
-
+        log.info("middle: "+ middle);
+        log.info("search Formatter: "+searchBE.getFormatters());
         if (countOnly) {
+            log.info("Count only case");
             // Fetch only the count
             long count = query.select(baseEntity.code).distinct().fetchCount();
             result = new QSearchBeResult(count);
         } else {
+            log.info("Fetch case");
             // Fetch data and count
+            log.info("fetchEntities != null && fetchEntities : "+ fetchEntities != null && fetchEntities);
             if (fetchEntities != null && fetchEntities) {
 
                 List<BaseEntity> entities = query.select(QBaseEntity.baseEntity).distinct().fetch();
