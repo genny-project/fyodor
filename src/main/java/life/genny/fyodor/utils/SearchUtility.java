@@ -13,7 +13,6 @@ import java.util.Optional;
 import java.util.Map;
 
 import javax.enterprise.context.ApplicationScoped;
-import javax.enterprise.event.Observes;
 import javax.inject.Inject;
 import javax.json.bind.Jsonb;
 import javax.json.bind.JsonbBuilder;
@@ -22,7 +21,6 @@ import javax.persistence.EntityManager;
 import org.apache.commons.lang3.StringUtils;
 import org.jboss.logging.Logger;
 
-import io.quarkus.runtime.StartupEvent;
 
 import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.core.types.dsl.ComparableExpressionBase;
@@ -32,8 +30,6 @@ import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Predicate;
 import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.JPQLQuery;
-
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import life.genny.qwandaq.attribute.Attribute;
 import life.genny.qwandaq.attribute.EntityAttribute;
@@ -50,60 +46,23 @@ import life.genny.qwandaq.message.QDataBaseEntityMessage;
 import life.genny.qwandaq.models.GennyToken;
 import life.genny.qwandaq.Answer;
 import life.genny.qwandaq.exception.BadDataException;
-import life.genny.qwandaq.utils.BaseEntityUtils;
 import life.genny.qwandaq.utils.CacheUtils;
-import life.genny.qwandaq.utils.KeycloakUtils;
-import life.genny.qwandaq.utils.QwandaUtils;
+import life.genny.serviceq.Service;
 
 @ApplicationScoped
 public class SearchUtility {
 
     private static final Logger log = Logger.getLogger(SearchUtility.class);
 
-    @ConfigProperty(name = "genny.keycloak.url", defaultValue = "https://keycloak.gada.io")
-    String baseKeycloakUrl;
-
-    @ConfigProperty(name = "genny.keycloak.realm", defaultValue = "genny")
-    String keycloakRealm;
-
-    @ConfigProperty(name = "genny.service.username", defaultValue = "service")
-    String serviceUsername;
-
-    @ConfigProperty(name = "genny.service.password", defaultValue = "password")
-    String servicePassword;
-
-    @ConfigProperty(name = "genny.oidc.client-id", defaultValue = "backend")
-    String clientId;
-
-    @ConfigProperty(name = "genny.oidc.credentials.secret", defaultValue = "secret")
-    String secret;
-
-    @ConfigProperty(name = "genny.service.cache.db", defaultValue = "false")
-    Boolean cacheDB;
+    Jsonb jsonb = JsonbBuilder.create();
 
     @Inject
     EntityManager entityManager;
 
-    @Inject
-    QwandaUtils qwandaUtils;
-
-    GennyToken serviceToken;
-
-    BaseEntityUtils beUtils;
-
-    Jsonb jsonb = JsonbBuilder.create();
+	@Inject
+	Service service;
 
     static public Map<String, Map<String, Attribute>> realmAttributeMap = new ConcurrentHashMap<>();
-
-    void onStart(@Observes StartupEvent ev) {
-        log.info("Service Username: " + serviceUsername);
-        log.info("Service Password: " + servicePassword);
-        serviceToken = KeycloakUtils.getToken(baseKeycloakUrl, keycloakRealm, clientId, secret, serviceUsername,
-                servicePassword);
-
-        // Init Utility Objects
-        beUtils = new BaseEntityUtils(serviceToken);
-    }
 
     public QBulkMessage processSearchEntity(SearchEntity searchBE, GennyToken userToken) {
 
@@ -124,7 +83,7 @@ public class SearchUtility {
             if (attr.getAttributeCode().equals("PRI_CODE") && attr.getAttributeName().equals("_EQ_")) {
                 log.info("SINGLE BASE ENTITY SEARCH DETECTED");
 
-                BaseEntity be = beUtils.getBaseEntityByCode(attr.getValue());
+                BaseEntity be = service.getBeUtils().getBaseEntityByCode(attr.getValue());
                 be.setIndex(0);
                 BaseEntity[] arr = new BaseEntity[1];
                 arr[0] = be;
@@ -185,7 +144,7 @@ public class SearchUtility {
         for (EntityAttribute ea : searchBE.getBaseEntityAttributes()) {
             if (ea.getAttributeCode().startsWith("CMB_")) {
                 String combinedSearchCode = ea.getAttributeCode().substring("CMB_".length());
-                SearchEntity combinedSearch = CacheUtils.getObject(this.serviceToken.getRealm(), combinedSearchCode,
+                SearchEntity combinedSearch = CacheUtils.getObject(service.getServiceToken().getRealm(), combinedSearchCode,
                         SearchEntity.class);
 
                 Long subTotal = performCount(combinedSearch);
@@ -199,7 +158,7 @@ public class SearchUtility {
         }
 
         try {
-            Attribute attrTotalResults = qwandaUtils.getAttribute("PRI_TOTAL_RESULTS");
+            Attribute attrTotalResults = service.getQwandaUtils().getAttribute("PRI_TOTAL_RESULTS");
             searchBE.addAnswer(new Answer(searchBE, searchBE, attrTotalResults, results.getTotal() + ""));
         } catch (BadDataException e) {
             log.error(e.getStackTrace());
@@ -237,7 +196,7 @@ public class SearchUtility {
         for (EntityAttribute ea : searchBE.getBaseEntityAttributes()) {
             if (ea.getAttributeCode().startsWith("CMB_")) {
                 String combinedSearchCode = ea.getAttributeCode().substring("CMB_".length());
-                SearchEntity combinedSearch = CacheUtils.getObject(this.serviceToken.getRealm(), combinedSearchCode,
+                SearchEntity combinedSearch = CacheUtils.getObject(service.getServiceToken().getRealm(), combinedSearchCode,
                         SearchEntity.class);
                 Long subTotal = performCount(combinedSearch);
                 if (subTotal != null) {
@@ -266,7 +225,7 @@ public class SearchUtility {
 
         log.info("About to search (" + searchBE.getCode() + ")");
 
-        String realm = this.serviceToken.getRealm();
+        String realm = service.getServiceToken().getRealm();
         Integer defaultPageSize = 20;
         // Init necessary vars
         QSearchBeResult result = null;
@@ -627,7 +586,7 @@ public class SearchUtility {
                 orderColumn = baseEntity.name;
             } else {
                 // Use Attribute Code to find the datatype, and thus the DB field to sort on
-                Attribute attr = qwandaUtils.getAttribute(attributeCode.substring("SRT_".length()));
+                Attribute attr = service.getQwandaUtils().getAttribute(attributeCode.substring("SRT_".length()));
                 String dtt = attr.getDataType().getClassName();
                 orderColumn = getPathFromDatatype(dtt, eaOrderJoin);
             }
@@ -1208,7 +1167,7 @@ public class SearchUtility {
         String finalAttributeCode = calEACode.substring("COL_".length());
         // Fetch The Attribute of the last code
         String primaryAttrCode = calFields[calFields.length - 1];
-        Attribute primaryAttribute = qwandaUtils.getAttribute(primaryAttrCode);
+        Attribute primaryAttribute = service.getQwandaUtils().getAttribute(primaryAttrCode);
 
         Answer ans = new Answer(baseBE.getCode(), baseBE.getCode(), finalAttributeCode, "");
         Attribute att = new Attribute(finalAttributeCode, primaryAttribute.getName(), primaryAttribute.getDataType());
@@ -1231,7 +1190,7 @@ public class SearchUtility {
                         continue;
                     }
 
-                    BaseEntity associatedBe = beUtils.getBaseEntityByCode(code);
+                    BaseEntity associatedBe = service.getBeUtils().getBaseEntityByCode(code);
                     if (associatedBe == null) {
                         log.debug("associatedBe DOES NOT exist ->" + code);
                         return null;
