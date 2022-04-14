@@ -96,6 +96,8 @@ public class SearchUtility {
     static public Map<String, Map<String, Attribute>> realmAttributeMap = new ConcurrentHashMap<>();
 
     void onStart(@Observes StartupEvent ev) {
+        log.info("Service Username: " + serviceUsername);
+        log.info("Service Password: " + servicePassword);
         serviceToken = KeycloakUtils.getToken(baseKeycloakUrl, keycloakRealm, clientId, secret, serviceUsername,
                 servicePassword);
 
