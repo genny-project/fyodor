@@ -39,6 +39,8 @@ public class InternalConsumer {
 
     void onStart(@Observes StartupEvent ev) {
 
+		service.showConfiguration();
+
 		service.initToken();
 		service.initDatabase();
 		service.initCache();
