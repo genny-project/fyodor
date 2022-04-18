@@ -86,7 +86,7 @@ public class Attributes {
 		}
 
 		String realm = service.getServiceToken().getRealm();
-		List<Attribute> attributes = databaseUtils.findAttributes(realm, 0, 10000, "*");
+		List<Attribute> attributes = databaseUtils.findAttributes(realm, 0, 10000, "");
 		QDataAttributeMessage attributeMsg = new QDataAttributeMessage(attributes.toArray(new Attribute[0]));
 
 
