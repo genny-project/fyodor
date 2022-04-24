@@ -54,8 +54,8 @@ public class Attributes {
 	 */
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
-	@Path("/{code}")
-	public Response read(@HeaderParam("Authorization") String token, @PathParam("code") String code) {
+	@Path("/{realm}/{code}")
+	public Response read(@HeaderParam("Authorization") String token, @PathParam("realm") String realm, @PathParam("code") String code) {
 
 		Boolean authorized = SecurityUtils.isAuthorizedToken(token);
 		if (!authorized) {
@@ -63,7 +63,7 @@ public class Attributes {
 					.entity(HttpUtils.error("Not authorized to make this request")).build();
 		}
 
-		String realm = service.getServiceToken().getRealm();
+//
 		Attribute attribute = databaseUtils.findAttributeByCode(realm, code);
 
 		return Response.ok(attribute).build();
@@ -76,8 +76,9 @@ public class Attributes {
 	 * @return The json item
 	 */
 	@GET
+	@Path("/{realm}")
 	@Produces(MediaType.APPLICATION_JSON)
-	public Response readAll(@HeaderParam("Authorization") String token) {
+	public Response readAll(@HeaderParam("Authorization") String token, @PathParam("realm") String realm) {
 
 		Boolean authorized = SecurityUtils.isAuthorizedToken(token);
 		if (!authorized) {
@@ -85,7 +86,7 @@ public class Attributes {
 					.entity(HttpUtils.error("Not authorized to make this request")).build();
 		}
 
-		String realm = service.getServiceToken().getRealm();
+		//String realm = service.getServiceToken().getRealm();
 		List<Attribute> attributes = databaseUtils.findAttributes(realm, 0, 10000, "");
 		QDataAttributeMessage attributeMsg = new QDataAttributeMessage(attributes.toArray(new Attribute[0]));
 
