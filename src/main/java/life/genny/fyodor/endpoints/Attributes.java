@@ -30,7 +30,7 @@ import org.jboss.resteasy.annotations.jaxrs.PathParam;
  * @author jasper.robison@gada.io
  *
  */
-@Path("/attribute")
+@Path("/attributes")
 public class Attributes {
 
 	private static final Logger log = Logger.getLogger(Attributes.class);
