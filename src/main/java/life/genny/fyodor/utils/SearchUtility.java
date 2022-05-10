@@ -228,6 +228,7 @@ public class SearchUtility {
 
         String realm = service.getServiceToken().getRealm();
         Integer defaultPageSize = GennySettings.defaultDropDownPageSize;
+        log.info("DEFAULT PAGE SIZE: " + defaultPageSize);
         // Init necessary vars
         QSearchBeResult result = null;
         List<String> codes = new ArrayList<String>();
@@ -651,6 +652,7 @@ public class SearchUtility {
         // Add all builder conditions to query
         query.where(builder);
         // Set page start and page size, then fetch codes
+        log.info("Using pageSize: " + pageSize);
         query.offset(pageStart).limit(pageSize);
 
         Instant middle = Instant.now();
