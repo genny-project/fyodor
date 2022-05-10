@@ -43,6 +43,7 @@ import life.genny.qwandaq.entity.QEntityEntity;
 import life.genny.qwandaq.message.QSearchBeResult;
 import life.genny.qwandaq.message.QBulkMessage;
 import life.genny.qwandaq.message.QDataBaseEntityMessage;
+import life.genny.qwandaq.models.GennySettings;
 import life.genny.qwandaq.models.GennyToken;
 import life.genny.qwandaq.Answer;
 import life.genny.qwandaq.exception.BadDataException;
@@ -226,7 +227,7 @@ public class SearchUtility {
         log.info("About to search (" + searchBE.getCode() + ")");
 
         String realm = service.getServiceToken().getRealm();
-        Integer defaultPageSize = 20;
+        Integer defaultPageSize = GennySettings.defaultDropDownPageSize;
         // Init necessary vars
         QSearchBeResult result = null;
         List<String> codes = new ArrayList<String>();
