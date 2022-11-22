@@ -111,7 +111,6 @@ public class InternalConsumer {
 		// Deserialize with null values to avoid deserialisation errors
 		QSearchMessage msg = jsonb.fromJson(data, QSearchMessage.class);
 		GennyToken userToken = new GennyToken(msg.getToken());
-		Boolean replace = msg.getReplace();
 
 		// update bridge switch
 		// String jti = userToken.getUniqueId();
@@ -128,7 +127,8 @@ public class InternalConsumer {
 
 		log.info("Handling search " + searchBE.getCode());
 
-        QBulkMessage bulkMsg = search.processSearchEntity(searchBE, userToken, replace);
+
+        QBulkMessage bulkMsg = search.processSearchEntity(searchBE, userToken);
 
 		Instant end = Instant.now();
 		log.info("Finished! - Duration: " + Duration.between(start, end).toMillis() + " millSeconds.");
