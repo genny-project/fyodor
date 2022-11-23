@@ -106,7 +106,7 @@ public class SearchUtility {
 		beUtils = new BaseEntityUtils(serviceToken);
     }
 
-	public QBulkMessage processSearchEntity(SearchEntity searchBE, GennyToken userToken) {
+	public QBulkMessage processSearchEntity(SearchEntity searchBE, GennyToken userToken, boolean replace) {
 
 		QSearchBeResult results = null;
 		Boolean isCountEntity = false;
@@ -212,7 +212,7 @@ public class SearchUtility {
 
 		QDataBaseEntityMessage searchBEMsg = new QDataBaseEntityMessage(searchBE);
 		searchBEMsg.setToken(userToken.getToken());
-		searchBEMsg.setReplace(true);
+		searchBEMsg.setReplace(replace);
 		bulkMsg.add(searchBEMsg);
 
 		// don't add result entities if it is only a count
