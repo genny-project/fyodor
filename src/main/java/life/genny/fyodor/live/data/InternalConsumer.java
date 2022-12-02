@@ -111,9 +111,10 @@ public class InternalConsumer {
 		// Deserialize with null values to avoid deserialisation errors
 		QSearchMessage msg = jsonb.fromJson(data, QSearchMessage.class);
 		GennyToken userToken = new GennyToken(msg.getToken());
-		boolean replace = msg.getReplace();
+		Boolean replace = msg.getReplace();
 		log.info("SBE replace value :: "+ replace);
-
+		if(replace == null)
+			replace = true;
 		// update bridge switch
 		// String jti = userToken.getUniqueId();
 		// String bridgeId = msg.getBridgeId();

@@ -219,7 +219,7 @@ public class SearchUtility {
 		if (!isCountEntity) {
 			QDataBaseEntityMessage entityMsg = new QDataBaseEntityMessage(results.getEntities());
 			entityMsg.setTotal(results.getTotal());
-			entityMsg.setReplace(true);
+			entityMsg.setReplace(replace);
 			entityMsg.setParentCode(searchBE.getCode());
 			entityMsg.setToken(userToken.getToken());
 			bulkMsg.add(entityMsg);
