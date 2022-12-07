@@ -104,7 +104,7 @@ public class InternalConsumer {
 	@Blocking
 	public void getSearchEvents(String data) {
 		log.info("Received incoming Search Event... ");
-		log.info(data);
+		log.debug(data);
 
 		Instant start = Instant.now();
 
